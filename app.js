@@ -1,4 +1,4 @@
-var Windshaft = require('../lib/windshaft');
+var Windshaft = require('windshaft');
 var _         = require('underscore');
 var conf      = require('./config');
 
