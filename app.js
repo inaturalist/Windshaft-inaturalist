@@ -151,10 +151,10 @@ var config = {
         req.params.style = defaultStylePoints;
       }
       if(req.params.taxon_color && req.params.taxon_color != 'undefined'){
-	req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,req.params.taxon_color);
+      	req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,req.params.taxon_color);
       }else{
         //Boring pink
-	req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,'#1E90FF');	
+        req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,'#1E90FF');	
       }
     }
   // send the finished req object on
@@ -183,6 +183,14 @@ var config = {
 
 // Initialize tile server on port 4000
 var ws = new Windshaft.Server(config);
+
+ws.get('/test',function(req,res){
+  if( typeof(req.params.param) == 'undefined' ){
+    res.send("No params received...");
+  }else{
+    res.send(req.params.param);
+  }
+});
 
 ws.listen(4000);
 
