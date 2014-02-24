@@ -1,4 +1,4 @@
-var Windshaft = require('windshaft');
+var Windshaft = require('../lib/windshaft');
 var _         = require('underscore');
 var conf      = require('./config');
 
@@ -151,11 +151,39 @@ var config = {
         req.params.style = defaultStylePoints;
       }
       if(req.params.taxon_color && req.params.taxon_color != 'undefined'){
-      	req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,req.params.taxon_color);
+	req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,req.params.taxon_color);
       }else{
         //Boring pink
-        req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,'#1E90FF');	
+	req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,'#1E90FF');	
       }
+    }else if(req.params.endpoint == 'timeline'){
+      /*req.params.sql = "(SELECT id, observed_on, species_guess, iconic_taxon_id, taxon_id, latitude, longitude, geom, " +
+        "positional_accuracy, captive, quality_grade FROM " +
+        "observations o WHERE observed_on <= TO_DATE('{{date_up}}','YYYY-MM-DD')) as observations";*/
+      req.params.sql = "(SELECT id, observed_on, species_guess, iconic_taxon_id, taxon_id, latitude, longitude, geom, " +
+        "positional_accuracy, captive, quality_grade FROM " +
+        "observations o WHERE TO_CHAR(observed_on,'YYYY-MM') = '{{date_up}}') as observations";
+      if(typeof(req.params.date_up) == 'undefined'){
+        req.params.date_up = '2010-01-01';
+      }
+      req.params.sql = req.params.sql.replace(/\{\{date_up\}\}/g,req.params.date_up);
+      req.params.style =  "#observations {" +
+        "marker-fill: {{color}}; " +
+        "marker-opacity: 1;" +
+        "marker-width: 8;" +
+        "marker-line-color: white;" +
+        "marker-line-width: 2;" +
+        "marker-line-opacity: 0.9;" +
+        "marker-placement: point;" +
+        "marker-type: ellipse;" +
+        "marker-allow-overlap: true; " +  
+        "}";
+      if(typeof(req.params.color) == 'undefined'){
+        req.params.style = req.params.style.replace(/\{\{color\}\}/g,'#1E90FF');
+      }else{
+        req.params.style = req.params.style.replace(/\{\{color\}\}/g,req.params.color);
+      }
+      req.params.interactivity="id";
     }
   // send the finished req object on
   var x = parseInt(req.params.x),
@@ -183,14 +211,6 @@ var config = {
 
 // Initialize tile server on port 4000
 var ws = new Windshaft.Server(config);
-
-ws.get('/test',function(req,res){
-  if( typeof(req.params.param) == 'undefined' ){
-    res.send("No params received...");
-  }else{
-    res.send(req.params.param);
-  }
-});
 
 ws.listen(4000);
 
