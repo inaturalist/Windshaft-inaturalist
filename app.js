@@ -1,12 +1,21 @@
-var Windshaft = require('../lib/windshaft');
+var Windshaft = require('windshaft');
 var _         = require('underscore');
 var conf      = require('./config');
 
-var pointQuery = "(SELECT o.id, o.species_guess, o.iconic_taxon_id, o.taxon_id, o.latitude, o.longitude, o.geom, " +
-  "o.positional_accuracy, o.captive, o.quality_grade FROM " + 
-  "observations o, taxa t " +
-  "WHERE o.taxon_id = t.id AND ( o.taxon_id = {{taxon_id}} OR '/' || t.ancestry || '/' LIKE '%/{{taxon_id}}/%' ) " +
-  " AND o.id != {{obs_id}}) as points";
+var pointQuery = "( \
+  SELECT  \
+    o.id, o.species_guess, o.iconic_taxon_id, o.taxon_id, o.latitude, o.longitude, o.geom, o.positional_accuracy, o.captive, o.quality_grade \
+  FROM \
+    observations o JOIN taxa t ON t.id = o.taxon_id, \
+    taxa target_taxon \
+  WHERE \
+    target_taxon.id = {{taxon_id}} \
+    AND ( \
+      t.id = {{taxon_id}}  \
+      OR t.ancestry = target_taxon.ancestry || '/' || {{taxon_id}}  \
+      OR t.ancestry LIKE target_taxon.ancestry || '/' || {{taxon_id}} || '/%' \
+    ) \
+) AS points"
 
 //Don't like hardcoding taxon colors here
 /*var defaultStylePoints = 
@@ -62,13 +71,31 @@ var defaultStylePoints =
   "}";
 
 
-var gridQuery = "(SELECT cnt, taxon_id, ST_Envelope(" +
-  "ST_GEOMETRYFROMTEXT('LINESTRING('||(st_xmax(the_geom)-({{seed}}/2))||' '||(st_ymax(the_geom)-({{seed}}/2))||'," +
-  "'||(st_xmax(the_geom)+({{seed}}/2))||' '||(st_ymax(the_geom)+({{seed}}/2))||')',4326)) as geom FROM " +
-  "(SELECT count(*) as cnt, o.taxon_id, t.ancestry,  ST_SnapToGrid(geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}}) as the_geom FROM " +
-  "observations o, taxa t  " +
-  "WHERE o.taxon_id=t.id AND (taxon_id={{taxon_id}} OR '/' || t.ancestry || '/' LIKE '%/{{taxon_id}}/%') " + 
-  "GROUP By taxon_id, ancestry, ST_SnapToGrid(geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}})) snap_grid ) as obs_grid";
+var gridQuery = "( \
+  SELECT  \
+    cnt,  \
+    taxon_id,  \
+    ST_Envelope( \
+      ST_GEOMETRYFROMTEXT( \
+        'LINESTRING('||(st_xmax(the_geom)-({{seed}}/2))||' '||(st_ymax(the_geom)-({{seed}}/2))||','||(st_xmax(the_geom)+({{seed}}/2))||' '||(st_ymax(the_geom)+({{seed}}/2))||')', \
+      4326) \
+    ) as geom \
+  FROM  \
+    ( \
+      SELECT count(*) as cnt, o.taxon_id, ST_SnapToGrid(geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}}) as the_geom  \
+      FROM \
+        observations o JOIN taxa t ON t.id = o.taxon_id, \
+        taxa target_taxon \
+      WHERE \
+        target_taxon.id = {{taxon_id}} \
+        AND ( \
+          t.ancestry = (target_taxon.ancestry || '/' || {{taxon_id}}) \
+          OR t.ancestry LIKE (target_taxon.ancestry || '/' || {{taxon_id}} || '/%') \
+          OR t.id = {{taxon_id}}  \
+        ) \
+      GROUP BY taxon_id, ST_SnapToGrid(geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}}) \
+    ) snap_grid \
+) as obs_grid";
 
 
 var defaultStyleGrid = 
@@ -112,58 +139,58 @@ var config = {
 
     req.params.dbname = conf.database.database_name;
 
-    if(req.params.endpoint == 'grid' ){		//Grid endpoint
+    if (req.params.endpoint == 'grid' ){		//Grid endpoint
       var seed = 16/Math.pow(2,parseInt(req.params.z));
-      if(seed > 4){
+      if (seed > 4) {
         seed = 4;
-      }else if (seed == 1){
+      } else if (seed == 1){
         seed = 0.99;
       }
       req.params.sql = gridQuery;
-      if(req.params.taxon_id){
+      if (req.params.taxon_id) {
         req.params.sql = req.params.sql.replace(/\{\{taxon_id\}\}/g,req.params.taxon_id);
-      }else{
+      } else {
         req.params.sql = req.params.sql.replace(/\{\{taxon_id\}\}/g,'-1');
       }
       req.params.sql = req.params.sql.replace(/\{\{seed\}\}/g, seed);
-      if(!req.params.style){
+      if (!req.params.style) {
         req.params.style = defaultStyleGrid;
       }
-      if(req.params.taxon_color && req.params.taxon_color != 'undefined'){
+      if (req.params.taxon_color && req.params.taxon_color != 'undefined') {
         req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,req.params.taxon_color);
-      }else{
+      } else {
         //Boring blue
         req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,'#FBB7ED');	
       }      
-    }else if(req.params.endpoint == 'points'){	//Points endpoint
+    } else if (req.params.endpoint == 'points') {	// Points endpoint
       req.params.sql = pointQuery;
-      if(req.params.taxon_id){
+      if (req.params.taxon_id) {
         req.params.sql = req.params.sql.replace(/\{\{taxon_id\}\}/g,req.params.taxon_id);
-      }else{
+      } else {
         req.params.sql = req.params.sql.replace(/\{\{taxon_id\}\}/g,'-1');
       }
-      if(req.params.obs_id){
+      if (req.params.obs_id) {
         req.params.sql = req.params.sql.replace(/\{\{obs_id\}\}/g,req.params.obs_id);		
-      }else{
+      } else {
         req.params.sql = req.params.sql.replace(/\{\{obs_id\}\}/g,'-1');
       }
-      if(!req.params.style){
+      if (!req.params.style) {
         req.params.style = defaultStylePoints;
       }
-      if(req.params.taxon_color && req.params.taxon_color != 'undefined'){
-	req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,req.params.taxon_color);
-      }else{
+      if (req.params.taxon_color && req.params.taxon_color != 'undefined') {
+	     req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,req.params.taxon_color);
+      } else {
         //Boring pink
-	req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,'#1E90FF');	
+        req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,'#1E90FF');	
       }
-    }else if(req.params.endpoint == 'timeline'){
+    } else if (req.params.endpoint == 'timeline') {
       /*req.params.sql = "(SELECT id, observed_on, species_guess, iconic_taxon_id, taxon_id, latitude, longitude, geom, " +
         "positional_accuracy, captive, quality_grade FROM " +
         "observations o WHERE observed_on <= TO_DATE('{{date_up}}','YYYY-MM-DD')) as observations";*/
       req.params.sql = "(SELECT id, observed_on, species_guess, iconic_taxon_id, taxon_id, latitude, longitude, geom, " +
         "positional_accuracy, captive, quality_grade FROM " +
         "observations o WHERE TO_CHAR(observed_on,'YYYY-MM') = '{{date_up}}') as observations";
-      if(typeof(req.params.date_up) == 'undefined'){
+      if (typeof(req.params.date_up) == 'undefined') {
         req.params.date_up = '2010-01-01';
       }
       req.params.sql = req.params.sql.replace(/\{\{date_up\}\}/g,req.params.date_up);
@@ -178,19 +205,19 @@ var config = {
         "marker-type: ellipse;" +
         "marker-allow-overlap: true; " +  
         "}";
-      if(typeof(req.params.color) == 'undefined'){
+      if (typeof(req.params.color) == 'undefined') {
         req.params.style = req.params.style.replace(/\{\{color\}\}/g,'#1E90FF');
-      }else{
+      } else {
         req.params.style = req.params.style.replace(/\{\{color\}\}/g,req.params.color);
       }
       req.params.interactivity="id";
     }
-  // send the finished req object on
-  var x = parseInt(req.params.x),
-    y = parseInt(req.params.y),
-    z = parseInt(req.params.z),
-    numTiles = Math.pow(2,z),
-    maxCoord = numTiles - 1
+    // send the finished req object on
+    var x = parseInt(req.params.x),
+        y = parseInt(req.params.y),
+        z = parseInt(req.params.z),
+        numTiles = Math.pow(2,z),
+        maxCoord = numTiles - 1
     
     x = x >= 0 ? x : maxCoord + x
     y = y >= 0 ? y : maxCoord + y
@@ -201,6 +228,10 @@ var config = {
     req.params.x = ''+x
     req.params.y = ''+y
     req.params.z = ''+z
+
+    if (conf.debug) {
+      console.log("[DEBUG] req.params.sql: ", req.params.sql)
+    }
 
     callback(null,req);
   },
