@@ -26,4 +26,8 @@ config.database.database_name = 'inaturalist_fork';
 config.redis.host = '127.0.0.1';
 config.redis.port = 6379;
 
+// debugging
+config.debug = false
+
 module.exports = config;
+
