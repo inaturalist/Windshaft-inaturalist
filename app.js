@@ -2,47 +2,11 @@ var Windshaft = require('windshaft');
 var _         = require('underscore');
 var conf      = require('./config');
 
-var pointQuery = "( \
-  SELECT  \
-    o.id, o.species_guess, o.iconic_taxon_id, o.taxon_id, o.latitude, o.longitude, o.geom, o.positional_accuracy, o.captive, o.quality_grade \
-  FROM \
-    observations o JOIN taxa t ON t.id = o.taxon_id, \
-    taxa target_taxon \
-  WHERE \
-    target_taxon.id = {{taxon_id}} \
-    AND ( \
-      t.id = {{taxon_id}}  \
-      OR t.ancestry = target_taxon.ancestry || '/' || {{taxon_id}}  \
-      OR t.ancestry LIKE target_taxon.ancestry || '/' || {{taxon_id}} || '/%' \
-    ) \
-) AS points"
-
-//Don't like hardcoding taxon colors here
-/*var defaultStylePoints = 
-  "#observations [zoom >=9]{" +
-  "marker-fill: {{taxon_color}}; " +
-  "marker-opacity: 1;" +
-  "marker-width: 8;" +
-  "marker-line-color: white;" +
-  "marker-line-width: 2;" +
-  "marker-line-opacity: 0.9;" +
-  "marker-placement: point;" +
-  "marker-type: ellipse;" +
-  "marker-allow-overlap: true; " +
-  "[taxon_id=2] { marker-fill: #1E90FF; marker-width: 32; marker-file: url(images/animalia-75px.png); } " +
-  "[taxon_id=3] { marker-fill: #1E90FF; marker-width: 32; marker-file: url(images/actinopterygii-75px.png); } " +
-  "[taxon_id=5] { marker-fill: #1E90FF; marker-width: 32; marker-file: url(images/aves-75px.png); } " +
-  "[taxon_id=6] { marker-fill: #1E90FF; marker-width: 32; marker-file: url(images/reptilia-75px.png); } " +
-  "[taxon_id=7] { marker-fill: #1E90FF; marker-width: 32; marker-file: url(images/amphibia-75px.png); } " +
-  "[taxon_id=8] { marker-fill: #1E90FF; marker-width: 32; marker-file: url(images/mammalia-75px.png); } " +
-  "[taxon_id=9] { marker-fill: #FF4500; marker-width: 32; marker-file: url(images/arachnida-75px.png); } " +
-  "[taxon_id=11] { marker-fill: #FF4500; marker-width: 32; marker-file: url(images/insecta-75px.png); } " +
-  "[taxon_id=12] { marker-fill: #73AC13; marker-width: 32; marker-file: url(images/plantae-75px.png); } " +
-  "[taxon_id=13] { marker-fill: #FF1493; marker-width: 32; marker-file: url(images/fungi-75px.png); } " +
-  "[taxon_id=14] { marker-fill: #8B008B; marker-width: 32; marker-file: url(images/protozoa-75px.png); } " +
-  "[taxon_id=15] { marker-fill: #FF4500; marker-width: 32; marker-file: url(images/mollusca-75px.png); } " +
-  "[taxon_id=16] { marker-fill: #993300; marker-width: 32; marker-file: url(images/chromista-75px.png); } " +
-  "}";*/
+var pointQuery = "(SELECT o.id, o.species_guess, o.iconic_taxon_id, o.taxon_id, o.latitude, o.longitude, o.geom, " +
+  "o.positional_accuracy, o.captive, o.quality_grade FROM " +
+  "observations o " +
+  "WHERE o.taxon_id = {{taxon_id}} " +
+  " AND o.id != {{obs_id}}) as points";
 
 var defaultStylePoints =
   "#observations [zoom >=9]{" +
@@ -70,33 +34,13 @@ var defaultStylePoints =
   "[taxon_id=16] { marker-fill: #993300; } " +
   "}";
 
-
-var gridQuery = "( \
-  SELECT  \
-    cnt,  \
-    taxon_id,  \
-    ST_Envelope( \
-      ST_GEOMETRYFROMTEXT( \
-        'LINESTRING('||(st_xmax(the_geom)-({{seed}}/2))||' '||(st_ymax(the_geom)-({{seed}}/2))||','||(st_xmax(the_geom)+({{seed}}/2))||' '||(st_ymax(the_geom)+({{seed}}/2))||')', \
-      4326) \
-    ) as geom \
-  FROM  \
-    ( \
-      SELECT count(*) as cnt, o.taxon_id, ST_SnapToGrid(geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}}) as the_geom  \
-      FROM \
-        observations o JOIN taxa t ON t.id = o.taxon_id, \
-        taxa target_taxon \
-      WHERE \
-        target_taxon.id = {{taxon_id}} \
-        AND ( \
-          t.ancestry = (target_taxon.ancestry || '/' || {{taxon_id}}) \
-          OR t.ancestry LIKE (target_taxon.ancestry || '/' || {{taxon_id}} || '/%') \
-          OR t.id = {{taxon_id}}  \
-        ) \
-      GROUP BY taxon_id, ST_SnapToGrid(geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}}) \
-    ) snap_grid \
-) as obs_grid";
-
+var gridQuery = "(SELECT cnt, taxon_id, ST_Envelope(" +
+  "ST_GEOMETRYFROMTEXT('LINESTRING('||(st_xmax(the_geom)-({{seed}}/2))||' '||(st_ymax(the_geom)-({{seed}}/2))||'," +
+  "'||(st_xmax(the_geom)+({{seed}}/2))||' '||(st_ymax(the_geom)+({{seed}}/2))||')',4326)) as geom FROM " +
+  "(SELECT count(*) as cnt, o.taxon_id, ST_SnapToGrid(geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}}) as the_geom FROM " +
+  "observations o " +
+  "WHERE taxon_id={{taxon_id}} " +
+  "GROUP By taxon_id, ST_SnapToGrid(geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}})) snap_grid ) as obs_grid";
 
 var defaultStyleGrid = 
   "#observations [zoom <9]{ " +
