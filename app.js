@@ -1,24 +1,37 @@
-var Windshaft = require('windshaft');
-var _         = require('underscore');
-var conf      = require('./config');
+var Windshaft = require('windshaft')
+var _         = require('underscore')
+var one       = require('onecolor')
+var squel     = require('squel')
+var conf      = require('./config')
 
-var pointQuery = "(SELECT o.id, o.species_guess, o.iconic_taxon_id, o.taxon_id, o.latitude, o.longitude, o.geom, " +
-  "o.positional_accuracy, o.captive, o.quality_grade FROM " +
-  "observations o " +
-  "WHERE o.taxon_id = {{taxon_id}} " +
-  " AND o.id != {{obs_id}}) as points";
+squel.useFlavour('postgres')
+
+var pointQuery = squel.select()
+  .field('o.id')
+  .field('o.species_guess')
+  .field('o.iconic_taxon_id')
+  .field('o.taxon_id')
+  .field('o.latitude')
+  .field('o.longitude')
+  .field('o.geom')
+  .field('o.positional_accuracy')
+  .field('o.captive')
+  .field('o.quality_grade')
+  .from('observations o')
 
 var defaultStylePoints =
-  "#observations [zoom >=9]{" +
-  "marker-fill: {{taxon_color}}; " +
+  "#observations {" +
+  "marker-fill: {{color}}; " +
   "marker-opacity: 1;" +
   "marker-width: 8;" +
-  "marker-line-color: white;" +
+  "marker-line-color: {{outline_color}};" +
   "marker-line-width: 2;" +
   "marker-line-opacity: 0.9;" +
   "marker-placement: point;" +
   "marker-type: ellipse;" +
-  "marker-allow-overlap: true; " +  
+  "marker-allow-overlap: true; " +
+  "[quality_grade='research'] {marker-line-color: white;} " +
+  "[captive=true] {marker-opacity: 0.2;}" +
   "[taxon_id=2] { marker-fill: #1E90FF; } " +
   "[taxon_id=3] { marker-fill: #1E90FF; } " +
   "[taxon_id=5] { marker-fill: #1E90FF; } " +
@@ -32,19 +45,42 @@ var defaultStylePoints =
   "[taxon_id=14] { marker-fill: #8B008B; } " +
   "[taxon_id=15] { marker-fill: #FF4500; } " +
   "[taxon_id=16] { marker-fill: #993300; } " +
-  "}";
+  "}"
 
-var gridQuery = "(SELECT cnt, taxon_id, ST_Envelope(" +
-  "ST_GEOMETRYFROMTEXT('LINESTRING('||(st_xmax(the_geom)-({{seed}}/2))||' '||(st_ymax(the_geom)-({{seed}}/2))||'," +
-  "'||(st_xmax(the_geom)+({{seed}}/2))||' '||(st_ymax(the_geom)+({{seed}}/2))||')',4326)) as geom FROM " +
-  "(SELECT count(*) as cnt, o.taxon_id, ST_SnapToGrid(geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}}) as the_geom FROM " +
-  "observations o " +
-  "WHERE taxon_id={{taxon_id}} " +
-  "GROUP By taxon_id, ST_SnapToGrid(geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}})) snap_grid ) as obs_grid";
+var pointPrecisionQuery = squel.select()
+  .field('o.id')
+  .field('o.quality_grade')
+  .field('o.taxon_id')
+  .field('o.positional_accuracy')
+  .field('ST_Buffer(o.geom::geography, positional_accuracy)::geometry AS geom')
+  .from('observations o')
+  .where('o.positional_accuracy > 0')
+
+var pointPrecisionStyle =
+  "#observations {" +
+    "polygon-fill: transparent;" +
+    "polygon-smooth: 1;" +
+    "line-dasharray: 2, 2;" +
+    "line-width: 1;" +
+    "line-color: {{color}};" +
+  "}"
+
+var gridQuery = squel.select()
+  .field('cnt')
+  .field(
+    "ST_Envelope(" +
+      "ST_GEOMETRYFROMTEXT('LINESTRING('||(st_xmax(the_geom)-({{seed}}/2))||' '||(st_ymax(the_geom)-({{seed}}/2))||','||(st_xmax(the_geom)+({{seed}}/2))||' '||(st_ymax(the_geom)+({{seed}}/2))||')',4326)"+
+    ") AS geom"
+  )
+var gridSnapQuery = squel.select()
+  .field("count(*) as cnt")
+  .field("ST_SnapToGrid(geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}}) AS the_geom")
+  .from('observations o')
+  .group('ST_SnapToGrid(geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}})')
 
 var defaultStyleGrid = 
-  "#observations [zoom <9]{ " +
-  "polygon-fill:#EFF3FF; " +
+  "#observations {" +
+  "polygon-fill:#000000; " +
   "polygon-opacity:0.6; " +
   "line-opacity:1; " +
   "line-color:#FFFFFF; " +
@@ -54,15 +90,109 @@ var defaultStyleGrid =
   " text-face-name:'Arial Bold';" +
   " text-allow-overlap: false;" +
   "}" +*/
-  "[cnt>=25] { polygon-fill: {{taxon_color}}; polygon-opacity:1.0;  } " +
-  "[cnt<20]  { polygon-fill: {{taxon_color}}; polygon-opacity:0.8;  } " +
-  "[cnt<15]  { polygon-fill: {{taxon_color}}; polygon-opacity:0.6;  } " +
-  "[cnt<10]  { polygon-fill: {{taxon_color}}; polygon-opacity:0.4;  } " +
-  "[cnt<5]  { polygon-fill: {{taxon_color}}; polygon-opacity:0.2;  } }";
+  "[cnt>=25] { polygon-fill: {{color}}; polygon-opacity:1.0;  } " +
+  "[cnt<20]  { polygon-fill: {{color}}; polygon-opacity:0.8;  } " +
+  "[cnt<15]  { polygon-fill: {{color}}; polygon-opacity:0.6;  } " +
+  "[cnt<10]  { polygon-fill: {{color}}; polygon-opacity:0.4;  } " +
+  "[cnt<5]  { polygon-fill: {{color}}; polygon-opacity:0.2;  } }";
 
+function gridRequest(req) {
+  var seed = 16/Math.pow(2,parseInt(req.params.z));
+  if (seed > 4) {
+    seed = 4;
+  } else if (seed == 1){
+    seed = 0.99;
+  }
+  var gq = gridQuery.clone(),
+      sq = gridSnapQuery.clone()
+  if (req.params.taxon_id) {
+    gq.field('taxon_id')
+    sq.field('taxon_id')
+    sq.where('taxon_id = '+req.params.taxon_id)
+    sq.group('taxon_id')
+  }
+  gq.from('('+sq.toString()+') AS snap_grid')
+  req.params.sql = '('+gq.toString()+') AS obs_grid'
+  req.params.sql = req.params.sql.replace(/\{\{seed\}\}/g, seed);
+  if (!req.params.style) {
+    req.params.style = defaultStyleGrid;
+  }
+  if (req.params.color && req.params.color != 'undefined') {
+    req.params.style = req.params.style.replace(/\{\{color\}\}/g,req.params.color)
+  } else {
+    req.params.style = req.params.style.replace(/\{\{color\}\}/g,'#333333')
+  }
+  return req
+}
+
+function pointsRequest(req) {
+  if (!req.params.style) {
+    req.params.style = defaultStylePoints;
+  }
+  req = commonPointRequest(req, pointQuery.clone())
+  return req
+}
+
+function pointPrecisionsRequest(req) {
+  if (!req.params.style) {
+    req.params.style = pointPrecisionStyle;
+  }
+  req = commonPointRequest(req, pointPrecisionQuery.clone())
+  return req
+}
+
+function commonPointRequest(req, query) {
+  if (req.params.taxon_id) {
+    query.where("o.taxon_id = "+req.params.taxon_id)
+  }
+  if (req.params.obs_id) {
+    query.where("o.id != "+req.params.obs_id)
+  }
+  req.params.sql = '('+query.toString()+') AS points'
+  if (req.params.color && req.params.color != 'undefined') {
+    req.params.style = req.params.style.replace(/\{\{color\}\}/g, req.params.color)
+    var c = one(req.params.color),
+        outlineColor = c.lightness() > 0.6 ? c.lightness(0.4).hex() : c.lightness(0.8).hex()
+    req.params.style = req.params.style.replace(/\{\{outline_color\}\}/g, outlineColor)
+  } else {
+    req.params.style = req.params.style.replace(/\{\{color\}\}/g,'#333333');
+    req.params.style = req.params.style.replace(/\{\{outline_color\}\}/g,'#AAAAAA')
+  }
+  return req
+}
+
+function timelineRequest(req) {
+  /*req.params.sql = "(SELECT id, observed_on, species_guess, iconic_taxon_id, taxon_id, latitude, longitude, geom, " +
+    "positional_accuracy, captive, quality_grade FROM " +
+    "observations o WHERE observed_on <= TO_DATE('{{date_up}}','YYYY-MM-DD')) as observations";*/
+  req.params.sql = "(SELECT id, observed_on, species_guess, iconic_taxon_id, taxon_id, latitude, longitude, geom, " +
+    "positional_accuracy, captive, quality_grade FROM " +
+    "observations o WHERE TO_CHAR(observed_on,'YYYY-MM') = '{{date_up}}') as observations";
+  if (typeof(req.params.date_up) == 'undefined') {
+    req.params.date_up = '2010-01-01';
+  }
+  req.params.sql = req.params.sql.replace(/\{\{date_up\}\}/g,req.params.date_up);
+  req.params.style =  "#observations {" +
+    "marker-fill: {{color}}; " +
+    "marker-opacity: 1;" +
+    "marker-width: 8;" +
+    "marker-line-color: white;" +
+    "marker-line-width: 2;" +
+    "marker-line-opacity: 0.9;" +
+    "marker-placement: point;" +
+    "marker-type: ellipse;" +
+    "marker-allow-overlap: true; " +  
+    "}";
+  if (typeof(req.params.color) == 'undefined') {
+    req.params.style = req.params.style.replace(/\{\{color\}\}/g,'#1E90FF');
+  } else {
+    req.params.style = req.params.style.replace(/\{\{color\}\}/g,req.params.color);
+  }
+  req.params.interactivity="id";
+  return req
+}
 
 var config = {
-  // base_url: '/database/:dbname/table/:table',
   base_url: '/:table/:endpoint',
   base_url_notable: '/:endpoint',
   grainstore: {
@@ -83,79 +213,20 @@ var config = {
 
     req.params.dbname = conf.database.database_name;
 
-    if (req.params.endpoint == 'grid' ){		//Grid endpoint
-      var seed = 16/Math.pow(2,parseInt(req.params.z));
-      if (seed > 4) {
-        seed = 4;
-      } else if (seed == 1){
-        seed = 0.99;
-      }
-      req.params.sql = gridQuery;
-      if (req.params.taxon_id) {
-        req.params.sql = req.params.sql.replace(/\{\{taxon_id\}\}/g,req.params.taxon_id);
-      } else {
-        req.params.sql = req.params.sql.replace(/\{\{taxon_id\}\}/g,'-1');
-      }
-      req.params.sql = req.params.sql.replace(/\{\{seed\}\}/g, seed);
-      if (!req.params.style) {
-        req.params.style = defaultStyleGrid;
-      }
-      if (req.params.taxon_color && req.params.taxon_color != 'undefined') {
-        req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,req.params.taxon_color);
-      } else {
-        //Boring blue
-        req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,'#FBB7ED');	
-      }      
+    // in lieu of a proper router
+    if (req.params.endpoint == 'grid') {		//Grid endpoint
+      req = gridRequest(req)    
     } else if (req.params.endpoint == 'points') {	// Points endpoint
-      req.params.sql = pointQuery;
-      if (req.params.taxon_id) {
-        req.params.sql = req.params.sql.replace(/\{\{taxon_id\}\}/g,req.params.taxon_id);
-      } else {
-        req.params.sql = req.params.sql.replace(/\{\{taxon_id\}\}/g,'-1');
-      }
-      if (req.params.obs_id) {
-        req.params.sql = req.params.sql.replace(/\{\{obs_id\}\}/g,req.params.obs_id);		
-      } else {
-        req.params.sql = req.params.sql.replace(/\{\{obs_id\}\}/g,'-1');
-      }
-      if (!req.params.style) {
-        req.params.style = defaultStylePoints;
-      }
-      if (req.params.taxon_color && req.params.taxon_color != 'undefined') {
-	     req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,req.params.taxon_color);
-      } else {
-        //Boring pink
-        req.params.style = req.params.style.replace(/\{\{taxon_color\}\}/g,'#1E90FF');	
-      }
+      req = pointsRequest(req)
+    } else if (req.params.endpoint == 'precisions') {
+      req = pointPrecisionsRequest(req)
     } else if (req.params.endpoint == 'timeline') {
-      /*req.params.sql = "(SELECT id, observed_on, species_guess, iconic_taxon_id, taxon_id, latitude, longitude, geom, " +
-        "positional_accuracy, captive, quality_grade FROM " +
-        "observations o WHERE observed_on <= TO_DATE('{{date_up}}','YYYY-MM-DD')) as observations";*/
-      req.params.sql = "(SELECT id, observed_on, species_guess, iconic_taxon_id, taxon_id, latitude, longitude, geom, " +
-        "positional_accuracy, captive, quality_grade FROM " +
-        "observations o WHERE TO_CHAR(observed_on,'YYYY-MM') = '{{date_up}}') as observations";
-      if (typeof(req.params.date_up) == 'undefined') {
-        req.params.date_up = '2010-01-01';
-      }
-      req.params.sql = req.params.sql.replace(/\{\{date_up\}\}/g,req.params.date_up);
-      req.params.style =  "#observations {" +
-        "marker-fill: {{color}}; " +
-        "marker-opacity: 1;" +
-        "marker-width: 8;" +
-        "marker-line-color: white;" +
-        "marker-line-width: 2;" +
-        "marker-line-opacity: 0.9;" +
-        "marker-placement: point;" +
-        "marker-type: ellipse;" +
-        "marker-allow-overlap: true; " +  
-        "}";
-      if (typeof(req.params.color) == 'undefined') {
-        req.params.style = req.params.style.replace(/\{\{color\}\}/g,'#1E90FF');
-      } else {
-        req.params.style = req.params.style.replace(/\{\{color\}\}/g,req.params.color);
-      }
-      req.params.interactivity="id";
+      req = timelineRequest(req)
+    } else {
+      // just a precaution to try and prevent sql injection
+      req.params.sql = "WHERE 1 = 2"
     }
+
     // send the finished req object on
     var x = parseInt(req.params.x),
         y = parseInt(req.params.y),
@@ -182,12 +253,9 @@ var config = {
   beforeTileRender: function(req, res, callback) {
     callback(null);
   }
-};
+}
 
 // Initialize tile server on port 4000
-var ws = new Windshaft.Server(config);
-
-ws.listen(4000);
-
-
+var ws = new Windshaft.Server(config)
+ws.listen(4000)
 console.log("map tiles are now being served out of: http://localhost:4000" + config.base_url + '/:z/:x/:y');
