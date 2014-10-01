@@ -85,6 +85,11 @@ var gridSnapQuery = squel.select()
   .from('observations o')
   .group('ST_SnapToGrid(geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}})')
 
+var gridSnapQueryZooms = squel.select()
+  .field("count as cnt")
+  .field("geom AS the_geom")
+  .from("observation_zooms_{{1000seed}}")
+
 var defaultStyleGrid = 
   "#observations {" +
   "polygon-fill:#000000; " +
@@ -111,7 +116,9 @@ function gridRequest(req, callback) {
     seed = 0.99;
   }
   var gq = gridQuery.clone(),
-      sq = gridSnapQuery.clone()
+      sq;
+  if(seed >= 0.125 && (!req.inat || !req.inat.taxon)) sq = gridSnapQueryZooms.clone();
+  else sq = gridSnapQuery.clone();
   if (req.inat && req.inat.taxon) {
     gq.field('taxon_id')
     sq.field('o.taxon_id')
@@ -126,6 +133,7 @@ function gridRequest(req, callback) {
   gq.from('('+sq.toString()+') AS snap_grid')
   req.params.sql = '('+gq.toString()+') AS obs_grid'
   req.params.sql = req.params.sql.replace(/\{\{seed\}\}/g, seed);
+  req.params.sql = req.params.sql.replace(/\{\{1000seed\}\}/g, seed * 1000);
   if (!req.params.style) {
     req.params.style = defaultStyleGrid;
   }
