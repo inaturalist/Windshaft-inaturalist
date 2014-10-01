@@ -117,7 +117,7 @@ function gridRequest(req, callback) {
   }
   var gq = gridQuery.clone(),
       sq;
-  if(seed >= 0.125 && (!req.inat || !req.inat.taxon)) sq = gridSnapQueryZooms.clone();
+  if(seed >= 0.06 && (!req.inat || !req.inat.taxon)) sq = gridSnapQueryZooms.clone();
   else sq = gridSnapQuery.clone();
   if (req.inat && req.inat.taxon) {
     gq.field('taxon_id')
@@ -133,7 +133,7 @@ function gridRequest(req, callback) {
   gq.from('('+sq.toString()+') AS snap_grid')
   req.params.sql = '('+gq.toString()+') AS obs_grid'
   req.params.sql = req.params.sql.replace(/\{\{seed\}\}/g, seed);
-  req.params.sql = req.params.sql.replace(/\{\{1000seed\}\}/g, seed * 1000);
+  req.params.sql = req.params.sql.replace(/\{\{1000seed\}\}/g, Math.round(seed * 1000));
   if (!req.params.style) {
     req.params.style = defaultStyleGrid;
   }
@@ -329,6 +329,10 @@ var config = {
   },
   beforeTileRender: function(req, res, callback) {
     callback(null);
+  },
+  afterTileRender: function(req, res, tile, headers, callback) {
+    headers['Cache-Control'] = 'public, max-age=3600';
+    callback(null, tile, headers);
   }
 }
 
