@@ -88,7 +88,7 @@ var gridSnapQuery = squel.select()
 var gridSnapQueryZooms = squel.select()
   .field("count as cnt")
   .field("geom AS the_geom")
-  .from("observation_zooms_{{1000seed}}")
+  .from("observation_zooms_{{zoom_table_suffix}}")
 
 var defaultStyleGrid = 
   "#observations {" +
@@ -117,23 +117,17 @@ function gridRequest(req, callback) {
   }
   var gq = gridQuery.clone(),
       sq;
-  if(seed >= 0.06 && (!req.inat || !req.inat.taxon)) sq = gridSnapQueryZooms.clone();
-  else sq = gridSnapQuery.clone();
-  if (req.inat && req.inat.taxon) {
-    gq.field('taxon_id')
-    sq.field('o.taxon_id')
-    sq
-      .join('taxa t', null, 't.id = o.taxon_id')
-      .where(
-        't.id = '+req.inat.taxon.id+ 
-        " OR t.ancestry = '" + req.inat.taxon.child_ancestry + "'" +
-        " OR t.ancestry LIKE '" + req.inat.taxon.descendant_ancestry + "'")
-    sq.group('o.taxon_id')
-  }
+  if(seed >= 0.06) {
+    if(req.inat && req.inat.taxon) {
+      sq = gridSnapQueryZooms.clone().where('taxon_id = ' + req.inat.taxon.id);
+    } else {
+      sq = gridSnapQueryZooms.clone().where('taxon_id IS NULL');
+    }
+  } else sq = gridSnapQuery.clone();
   gq.from('('+sq.toString()+') AS snap_grid')
   req.params.sql = '('+gq.toString()+') AS obs_grid'
   req.params.sql = req.params.sql.replace(/\{\{seed\}\}/g, seed);
-  req.params.sql = req.params.sql.replace(/\{\{1000seed\}\}/g, Math.round(seed * 1000));
+  req.params.sql = req.params.sql.replace(/\{\{zoom_table_suffix\}\}/g, Math.round(seed * 1000));
   if (!req.params.style) {
     req.params.style = defaultStyleGrid;
   }
