@@ -15,11 +15,11 @@
   "readmeFilename": "README.md",
   "gitHead": "a2a918553de816c73dc3ab37ee09c7f0b25292e0",
   "dependencies": {
-    "windshaft"  : "https://github.com/CartoDB/Windshaft/archive/0.27.1.tar.gz",
+    "windshaft"  : "https://github.com/CartoDB/Windshaft/archive/0.31.0.tar.gz",
     "underscore"  : "~1.7.0",
     "onecolor": "~2.4.2",
-    "squel": "~3.8.1",
+    "squel": "~3.9.1",
     "step": "~0.0.5",
-    "pg": "~3.4.5"
+    "pg": "~3.6.2"
   }
 }

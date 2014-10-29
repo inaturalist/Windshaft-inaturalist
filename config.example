@@ -1,33 +1,43 @@
-//Example config file for the windshaft server
-//Fill with the appropiate values and rename to config.js
+// Example config file for the windshaft server
+// Fill with the appropiate values and rename to config.js
 
-//Configuration structure name
-var config = {};
+// Configuration structure name
+var config = { };
 
-//Config sections
-config.database = {};
-config.redis = {};
+// Config sections
+config.application = { };
+config.database = { };
+config.redis = { };
 
-//database connection params
-//The database user
-config.database.user = 'agusti';
-//IP address or name of the postgresql database server
-config.database.host = 'localhost';
-//Port in which the postgresql instance listens for connections
+// Port which the node.js application will run on
+config.application.listen_port = 4000;
+// How many threads should be created to handle tile requests
+config.application.number_of_threads = require("os").cpus().length;
+config.application.max_zoom_level_for_grids = 12;
+config.application.min_zoom_level_for_points = 9;
+config.application.cache_control = "public, max-age=3600";
+
+// database connection params
+// The database user
+config.database.user = "agusti";
+// IP address or name of the postgresql database server
+config.database.host = "localhost";
+// Port in which the postgresql instance listens for connections
 config.database.port = 5432;
-//Name of the geometry field
-config.database.geometry_field = 'geom';
-//Spatial reference system id
+// Name of the geometry field
+config.database.geometry_field = "geom";
+// Spatial reference system id
 config.database.srid = 4326;
-//Postgresql database name
-config.database.database_name = 'inaturalist_fork';
+// Postgresql database name
+config.database.database_name = "inaturalist";
+// Postgresql database password
+config.database.password = null;
 
-//redis-server params
-config.redis.host = '127.0.0.1';
+// redis-server params
+config.redis.host = "127.0.0.1";
 config.redis.port = 6379;
 
 // debugging
-config.debug = false
+config.debug = false;
 
 module.exports = config;
-
