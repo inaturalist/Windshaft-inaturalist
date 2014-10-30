@@ -28,7 +28,8 @@ var pointQuery = squel.select()
   .field("o.positional_accuracy")
   .field("o.captive")
   .field("o.quality_grade")
-  .from("observations o");
+  .from("observations o")
+  .where("o.mappable = true");
 
 var defaultStylePoints =
   "#observations {" +
@@ -58,23 +59,24 @@ var defaultStylePoints =
   "[iconic_taxon_id=48222] { marker-fill: #993300; } " +
   "}";
 
-var pointPrecisionQuery = squel.select()
-  .field("o.id")
-  .field("o.quality_grade")
-  .field("o.taxon_id")
-  .field("o.positional_accuracy")
-  .field("ST_Buffer(ST_SetSrid(o.geom, 4326)::geography, positional_accuracy)::geometry AS geom")
-  .from("observations o")
-  .where("o.positional_accuracy > 0");
-
-var pointPrecisionStyle =
-  "#observations {" +
-    "polygon-fill: transparent;" +
-    "polygon-smooth: 1;" +
-    "line-dasharray: 2, 2;" +
-    "line-width: 1;" +
-    "line-color: {{color}};" +
-  "}";
+// var pointPrecisionQuery = squel.select()
+//   .field("o.id")
+//   .field("o.quality_grade")
+//   .field("o.taxon_id")
+//   .field("o.positional_accuracy")
+//   .field("ST_Buffer(ST_SetSrid(o.geom, 4326)::geography, positional_accuracy)::geometry AS geom")
+//   .from("observations o")
+//   .where("o.positional_accuracy > 0")
+//   .where("o.mappable = true");
+// 
+// var pointPrecisionStyle =
+//   "#observations {" +
+//     "polygon-fill: transparent;" +
+//     "polygon-smooth: 1;" +
+//     "line-dasharray: 2, 2;" +
+//     "line-width: 1;" +
+//     "line-color: {{color}};" +
+//   "}";
 
 var gridQuery = squel.select()
   .field("cnt")
@@ -150,12 +152,12 @@ function pointsRequest(req, callback) {
   req = commonPointRequest(req, pointQuery.clone(), callback);
 }
 
-function pointPrecisionsRequest(req, callback) {
-  if (!req.params.style) {
-    req.params.style = pointPrecisionStyle;
-  }
-  req = commonPointRequest(req, pointPrecisionQuery.clone(), callback);
-}
+// function pointPrecisionsRequest(req, callback) {
+//   if (!req.params.style) {
+//     req.params.style = pointPrecisionStyle;
+//   }
+//   req = commonPointRequest(req, pointPrecisionQuery.clone(), callback);
+// }
 
 function commonPointRequest(req, query, callback) {
   if (req && parseInt(req.params.z) < conf.application.min_zoom_level_for_points) {
@@ -163,11 +165,9 @@ function commonPointRequest(req, query, callback) {
   }
   if (req.inat && req.inat.taxon) {
     query
-      .join("taxa t", null, "t.id = o.taxon_id")
+      .join("taxon_ancestors ta", null, "ta.taxon_id = o.taxon_id")
       .where(
-        "t.id = " + req.inat.taxon.id +
-        " OR t.ancestry = '" + req.inat.taxon.child_ancestry + "'" +
-        " OR t.ancestry LIKE '" + req.inat.taxon.descendant_ancestry + "'");
+        "ta.ancestor_taxon_id = " + req.inat.taxon.id);
   }
   if (req.params.obs_id) {
     query.where("o.id != " + req.params.obs_id);
@@ -185,33 +185,33 @@ function commonPointRequest(req, query, callback) {
   callback(null, req);
 }
 
-function timelineRequest(req, callback) {
-  req.params.sql = "(SELECT id, observed_on, species_guess, iconic_taxon_id, taxon_id, latitude, longitude, geom, " +
-    "positional_accuracy, captive, quality_grade FROM " +
-    "observations o WHERE TO_CHAR(observed_on,'YYYY-MM') = '{{date_up}}') as observations";
-  if (req.params.date_up === "undefined") {
-    req.params.date_up = "2010-01-01";
-  }
-  req.params.sql = req.params.sql.replace(/\{\{date_up\}\}/g, req.params.date_up);
-  req.params.style =  "#observations {" +
-    "marker-fill: {{color}}; " +
-    "marker-opacity: 1;" +
-    "marker-width: 8;" +
-    "marker-line-color: white;" +
-    "marker-line-width: 2;" +
-    "marker-line-opacity: 0.9;" +
-    "marker-placement: point;" +
-    "marker-type: ellipse;" +
-    "marker-allow-overlap: true; " +
-    "}";
-  if (req.params.color === "undefined") {
-    req.params.style = req.params.style.replace(/\{\{color\}\}/g, "#1E90FF");
-  } else {
-    req.params.style = req.params.style.replace(/\{\{color\}\}/g, req.params.color);
-  }
-  req.params.interactivity="id";
-  callback(null, req);
-}
+// function timelineRequest(req, callback) {
+//   req.params.sql = "(SELECT id, observed_on, species_guess, iconic_taxon_id, taxon_id, latitude, longitude, geom, " +
+//     "positional_accuracy, captive, quality_grade FROM " +
+//     "observations o WHERE TO_CHAR(observed_on,'YYYY-MM') = '{{date_up}}') as observations";
+//   if (req.params.date_up === "undefined") {
+//     req.params.date_up = "2010-01-01";
+//   }
+//   req.params.sql = req.params.sql.replace(/\{\{date_up\}\}/g, req.params.date_up);
+//   req.params.style =  "#observations {" +
+//     "marker-fill: {{color}}; " +
+//     "marker-opacity: 1;" +
+//     "marker-width: 8;" +
+//     "marker-line-color: white;" +
+//     "marker-line-width: 2;" +
+//     "marker-line-opacity: 0.9;" +
+//     "marker-placement: point;" +
+//     "marker-type: ellipse;" +
+//     "marker-allow-overlap: true; " +
+//     "}";
+//   if (req.params.color === "undefined") {
+//     req.params.style = req.params.style.replace(/\{\{color\}\}/g, "#1E90FF");
+//   } else {
+//     req.params.style = req.params.style.replace(/\{\{color\}\}/g, req.params.color);
+//   }
+//   req.params.interactivity="id";
+//   callback(null, req);
+// }
 
 var loadTaxon = function(req, callback) {
   var taxonId = req.params.taxon_id;
@@ -291,10 +291,10 @@ var config = {
           gridRequest(req, this);
         } else if (req.params.endpoint === "points") { // Points endpoint
           pointsRequest(req, this);
-        } else if (req.params.endpoint === "precisions") {
-          pointPrecisionsRequest(req, this);
-        } else if (req.params.endpoint === "timeline") {
-          timelineRequest(req, this);
+        // } else if (req.params.endpoint === "precisions") {
+        //   pointPrecisionsRequest(req, this);
+        // } else if (req.params.endpoint === "timeline") {
+        //   timelineRequest(req, this);
         } else {
           // just a precaution to try and prevent sql injection
           req.params.sql = "(SELECT geom FROM observations WHERE 1 = 2) AS foo";
@@ -342,8 +342,8 @@ var config = {
 // Initialize tile server on port conf.application.listen_port
 var ws = new Windshaft.Server(config);
 
-if (cluster.isMaster) {
-  // create as many workers as CPUs
+if (cluster.isMaster && conf.application.number_of_threads) {
+  // create as many workers as conf.application.number_of_threads
   for (var i = 0; i < conf.application.number_of_threads; i++) {
     cluster.fork();
   }
