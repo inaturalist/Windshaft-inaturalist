@@ -24,7 +24,7 @@ var pointQuery = squel.select()
   .field("o.taxon_id")
   .field("o.latitude")
   .field("o.longitude")
-  .field("ST_SetSrid(o.geom, 4326) AS geom")
+  .field("o.geom")
   .field("o.positional_accuracy")
   .field("o.captive")
   .field("o.quality_grade")
@@ -78,17 +78,9 @@ var defaultStylePoints =
 //     "line-color: {{color}};" +
 //   "}";
 
-var gridQuery = squel.select()
-  .field("cnt")
-  .field(
-    "ST_Envelope(" +
-      "ST_GEOMETRYFROMTEXT('LINESTRING('||(st_xmax(the_geom)-({{seed}}/2))||' '||(st_ymax(the_geom)-({{seed}}/2))||','||(st_xmax(the_geom)+({{seed}}/2))||' '||(st_ymax(the_geom)+({{seed}}/2))||')',4326)"+
-    ") AS geom"
-  );
-
 var gridSnapQueryDenormalized = squel.select()
   .field("count as cnt")
-  .field("geom AS the_geom")
+  .field("geom")
   .from("observation_zooms_{{zoom_table_suffix}}");
 
 var defaultStyleGrid =
@@ -123,15 +115,13 @@ function gridRequest(req, callback) {
   } else if (seed === 1) {
     seed = 0.99;
   }
-  var gq = gridQuery.clone(),
-      sq;
+  var sq;
   if (req.inat && req.inat.taxon) {
     sq = gridSnapQueryDenormalized.clone().where("taxon_id = " + req.inat.taxon.id);
   } else {
     sq = gridSnapQueryDenormalized.clone().where("taxon_id IS NULL");
   }
-  gq.from("(" + sq.toString() + ") AS snap_grid");
-  req.params.sql = "(" + gq.toString() + ") AS obs_grid";
+  req.params.sql = "(" + sq.toString() + ") AS snap_grid";
   req.params.sql = req.params.sql.replace(/\{\{seed\}\}/g, seed);
   req.params.sql = req.params.sql.replace(/\{\{zoom_table_suffix\}\}/g, z);
   if (!req.params.style) {
