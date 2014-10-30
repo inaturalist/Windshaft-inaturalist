@@ -41,21 +41,21 @@ var defaultStylePoints =
   "marker-placement: point;" +
   "marker-type: ellipse;" +
   "marker-allow-overlap: true; " +
-  "[quality_grade='research'] {marker-line-color: white;} " +
-  "[captive=true] {marker-opacity: 0.2;}" +
-  "[taxon_id=2] { marker-fill: #1E90FF; } " +
-  "[taxon_id=3] { marker-fill: #1E90FF; } " +
-  "[taxon_id=5] { marker-fill: #1E90FF; } " +
-  "[taxon_id=6] { marker-fill: #1E90FF; } " +
-  "[taxon_id=7] { marker-fill: #1E90FF; } " +
-  "[taxon_id=8] { marker-fill: #1E90FF; } " +
-  "[taxon_id=9] { marker-fill: #FF4500; } " +
-  "[taxon_id=11] { marker-fill: #FF4500; } " +
-  "[taxon_id=12] { marker-fill: #73AC13; } " +
-  "[taxon_id=13] { marker-fill: #FF1493; } " +
-  "[taxon_id=14] { marker-fill: #8B008B; } " +
-  "[taxon_id=15] { marker-fill: #FF4500; } " +
-  "[taxon_id=16] { marker-fill: #993300; } " +
+  "[quality_grade='research'] { marker-line-color: white; } " +
+  "[captive=true] { marker-opacity: 0.2; }" +
+  "[iconic_taxon_id=1] { marker-fill: #1E90FF; } " +
+  "[iconic_taxon_id=3] { marker-fill: #1E90FF; } " +
+  "[iconic_taxon_id=20978] { marker-fill: #1E90FF; } " +
+  "[iconic_taxon_id=26036] { marker-fill: #1E90FF; } " +
+  "[iconic_taxon_id=40151] { marker-fill: #1E90FF; } " +
+  "[iconic_taxon_id=47115] { marker-fill: #FF4500; } " +
+  "[iconic_taxon_id=47119] { marker-fill: #FF4500; } " +
+  "[iconic_taxon_id=47126] { marker-fill: #73AC13; } " +
+  "[iconic_taxon_id=47158] { marker-fill: #FF4500; } " +
+  "[iconic_taxon_id=47170] { marker-fill: #FF1493; } " +
+  "[iconic_taxon_id=47178] { marker-fill: #1E90FF; } " +
+  "[iconic_taxon_id=47686] { marker-fill: #8B008B; } " +
+  "[iconic_taxon_id=48222] { marker-fill: #993300; } " +
   "}";
 
 var pointPrecisionQuery = squel.select()
