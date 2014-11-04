@@ -12,7 +12,8 @@ var pgConfig = {
   password: conf.database.password,
   host: conf.database.host,
   port: conf.database.port,
-  database: conf.database.database_name
+  database: conf.database.database_name,
+  ssl: conf.database.ssl
 };
 
 squel.useFlavour("postgres");
@@ -79,7 +80,7 @@ var defaultStylePoints =
 //   "}";
 
 var gridSnapQueryDenormalized = squel.select()
-  .field("count as cnt")
+  .field("count")
   .field("geom")
   .from("observation_zooms_{{zoom_table_suffix}}");
 
@@ -91,17 +92,17 @@ var defaultStyleGrid =
   "line-color:#FFFFFF; " +
   //Labels test
 /*  "::labels{" +
-  " text-name: '[cnt]';" +
+  " text-name: '[count]';" +
   " text-face-name:'Arial Bold';" +
   " text-allow-overlap: false;" +
   "}" +*/
-  "[cnt>=45] { polygon-fill: {{color}}; polygon-opacity:1.0;  } " +
-  "[cnt<45] { polygon-fill: {{color}}; polygon-opacity:0.95;  } " +
-  "[cnt<35]  { polygon-fill: {{color}}; polygon-opacity:0.87;  } " +
-  "[cnt<25]  { polygon-fill: {{color}}; polygon-opacity:0.8;  } " +
-  "[cnt<15]  { polygon-fill: {{color}}; polygon-opacity:0.7;  } " +
-  "[cnt<8]  { polygon-fill: {{color}}; polygon-opacity:0.6;  } " +
-  "[cnt<3]  { polygon-fill: {{color}}; polygon-opacity:0.5;  } }";
+  "[count>=45] { polygon-fill: {{color}}; polygon-opacity:1.0; } " +
+  "[count<45] { polygon-fill: {{color}}; polygon-opacity:0.95; } " +
+  "[count<35] { polygon-fill: {{color}}; polygon-opacity:0.87; } " +
+  "[count<25] { polygon-fill: {{color}}; polygon-opacity:0.8; } " +
+  "[count<15] { polygon-fill: {{color}}; polygon-opacity:0.7; } " +
+  "[count<8] { polygon-fill: {{color}}; polygon-opacity:0.6; } " +
+  "[count<3] { polygon-fill: {{color}}; polygon-opacity:0.5; } }";
 
 function gridRequest(req, callback) {
   if (req && parseInt(req.params.z) > conf.application.max_zoom_level_for_grids) {
@@ -305,7 +306,6 @@ var config = {
           x = x >= 0 ? x : maxCoord + x;
           y = y >= 0 ? y : maxCoord + y;
           if (x > maxCoord) { x = x % numTiles; }
-          if (y > maxCoord) { y = y % numTiles; }
           if (x < -1 * maxCoord) { x = Math.abs(x) % numTiles; }
           if (y < -1 * maxCoord) { y = Math.abs(y) % numTiles; }
           req.params.x = x.toString();
