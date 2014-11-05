@@ -11,8 +11,6 @@ config.redis = { };
 
 // Port which the node.js application will run on
 config.application.listen_port = 4000;
-// How many threads should be created to handle tile requests
-config.application.number_of_threads = require("os").cpus().length;
 config.application.max_zoom_level_for_grids = 12;
 config.application.min_zoom_level_for_points = 9;
 config.application.cache_control = "public, max-age=3600";

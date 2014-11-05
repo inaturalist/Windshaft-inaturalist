@@ -7,6 +7,9 @@ var Step      = require("step");
 var pg        = require("pg");
 var cluster   = require("cluster");
 
+var cachedMaxCounts = { };
+var pgClient;
+
 var pgConfig = {
   user: conf.database.user,
   password: conf.database.password,
@@ -31,6 +34,11 @@ var pointQuery = squel.select()
   .field("o.quality_grade")
   .from("observations o")
   .where("o.mappable = true");
+
+var gridSnapQueryDenormalized = squel.select()
+  .field("count")
+  .field("geom")
+  .from("{{cacheTable}}");
 
 var defaultStylePoints =
   "#observations {" +
@@ -60,42 +68,15 @@ var defaultStylePoints =
   "[iconic_taxon_id=48222] { marker-fill: #993300; } " +
   "}";
 
-// var pointPrecisionQuery = squel.select()
-//   .field("o.id")
-//   .field("o.quality_grade")
-//   .field("o.taxon_id")
-//   .field("o.positional_accuracy")
-//   .field("ST_Buffer(ST_SetSrid(o.geom, 4326)::geography, positional_accuracy)::geometry AS geom")
-//   .from("observations o")
-//   .where("o.positional_accuracy > 0")
-//   .where("o.mappable = true");
-// 
-// var pointPrecisionStyle =
-//   "#observations {" +
-//     "polygon-fill: transparent;" +
-//     "polygon-smooth: 1;" +
-//     "line-dasharray: 2, 2;" +
-//     "line-width: 1;" +
-//     "line-color: {{color}};" +
-//   "}";
-
-var gridSnapQueryDenormalized = squel.select()
-  .field("count")
-  .field("geom")
-  .from("observation_zooms_{{zoom_table_suffix}}");
-
 var defaultStyleGrid =
   "#observations {" +
   "polygon-fill:#000000; " +
   "polygon-opacity:0.6; " +
-  "line-opacity:1; " +
+  "line-opacity:0.2; " +
   "line-color:#FFFFFF; " +
-  //Labels test
-/*  "::labels{" +
-  " text-name: '[count]';" +
-  " text-face-name:'Arial Bold';" +
-  " text-allow-overlap: false;" +
-  "}" +*/
+  "{{styleCounts}}"
+
+var defaultStyleCounts =
   "[count>=45] { polygon-fill: {{color}}; polygon-opacity:1.0; } " +
   "[count<45] { polygon-fill: {{color}}; polygon-opacity:0.95; } " +
   "[count<35] { polygon-fill: {{color}}; polygon-opacity:0.87; } " +
@@ -108,14 +89,6 @@ function gridRequest(req, callback) {
   if (req && parseInt(req.params.z) > conf.application.max_zoom_level_for_grids) {
     return callback("Unable to process grid requests for this zoom level");
   }
-  var z = parseInt(req.params.z);
-  var seed = 16 / Math.pow(2, z);
-  if (seed > 4) {
-    seed = 4;
-    z = 2;
-  } else if (seed === 1) {
-    seed = 0.99;
-  }
   var sq;
   if (req.inat && req.inat.taxon) {
     sq = gridSnapQueryDenormalized.clone().where("taxon_id = " + req.inat.taxon.id);
@@ -123,10 +96,15 @@ function gridRequest(req, callback) {
     sq = gridSnapQueryDenormalized.clone().where("taxon_id IS NULL");
   }
   req.params.sql = "(" + sq.toString() + ") AS snap_grid";
-  req.params.sql = req.params.sql.replace(/\{\{seed\}\}/g, seed);
-  req.params.sql = req.params.sql.replace(/\{\{zoom_table_suffix\}\}/g, z);
+  req.params.sql = req.params.sql.replace(/\{\{cacheTable\}\}/g, req.inat.cacheTable);
   if (!req.params.style) {
     req.params.style = defaultStyleGrid;
+  }
+  if (req.inat && req.inat.maximumCount) {
+    req.params.style = req.params.style.replace(/\{\{styleCounts\}\}/g,
+      stylesFromMaxCount(req.inat.maximumCount) + "}");
+  } else {
+    req.params.style = req.params.style.replace(/\{\{styleCounts\}\}/g, defaultStyleCounts);
   }
   if (req.params.color && req.params.color !== "undefined") {
     req.params.style = req.params.style.replace(/\{\{color\}\}/g, req.params.color);
@@ -142,13 +120,6 @@ function pointsRequest(req, callback) {
   }
   req = commonPointRequest(req, pointQuery.clone(), callback);
 }
-
-// function pointPrecisionsRequest(req, callback) {
-//   if (!req.params.style) {
-//     req.params.style = pointPrecisionStyle;
-//   }
-//   req = commonPointRequest(req, pointPrecisionQuery.clone(), callback);
-// }
 
 function commonPointRequest(req, query, callback) {
   if (req && parseInt(req.params.z) < conf.application.min_zoom_level_for_points) {
@@ -204,40 +175,51 @@ function commonPointRequest(req, query, callback) {
 //   callback(null, req);
 // }
 
-var loadTaxon = function(req, callback) {
-  var taxonId = req.params.taxon_id;
-  var client;
+var loookupMaxCountForGrid = function(req, callback) {
+  var taxonID = req.params.taxon_id;
+  var taxonIDClause = taxonID ? "= " + taxonID : "IS NULL";
+  cachedMaxCounts[taxonID] = cachedMaxCounts[taxonID] || { }
+  // If we have looked up the max cell count for this taxon / zoom, return it
+  if (cachedMaxCounts[taxonID][req.inat.cacheTable]) {
+    req.inat.maximumCount = cachedMaxCounts[taxonID][req.inat.cacheTable];
+    return callback(null, req);
+  }
   Step(
     function() {
-      client = new pg.Client(pgConfig);
-      client.connect(this);
-    },
-    function handleConnection(err, client, done) {
-      if (err) {
-        console.error("could not connect to postgres", err);
-        callback(null, req);
-        return null;
-      }
-      client.query("SELECT id, name, ancestry, rank, rank_level FROM taxa WHERE id = " + taxonId, this);
+      pgClient.query("SELECT MAX(count) as max FROM " + req.inat.cacheTable +
+        " WHERE taxon_id " + taxonIDClause, this);
     },
     function handleResult(err, result) {
-      if (err) {
-        console.error("error running query", err);
+      if (err) { console.error("error running query", err); }
+      if (result && result.rows.length > 0) {
+        req.inat.maximumCount = result.rows[0].max;
+        cachedMaxCounts[taxonID][req.inat.cacheTable] = result.rows[0].max;
       }
+      callback(null, req);
+    }
+  );
+}
+
+var loadTaxon = function(req, callback) {
+  var taxonID = req.params.taxon_id;
+  Step(
+    function() {
+      pgClient.query("SELECT id, name, ancestry, rank, rank_level FROM taxa WHERE id = " + taxonID, this);
+    },
+    function handleResult(err, result) {
+      if (err) { console.error("error running query", err); }
       if (result && result.rows.length > 0) {
         var ancestry = result.rows[0].ancestry;
-        req.inat = req.inat || { };
         req.inat.taxon = {
           id: result.rows[0].id,
           name: result.rows[0].name,
           rank: result.rows[0].rank,
           rankLevel: result.rows[0].rank_level,
           ancestry: ancestry,
-          child_ancestry: ancestry + "/" + taxonId,
-          descendant_ancestry: ancestry + "/" + taxonId + "/%"
+          child_ancestry: ancestry + "/" + taxonID,
+          descendant_ancestry: ancestry + "/" + taxonID + "/%"
         };
       }
-      client.end();
       callback(null, req);
     }
   );
@@ -264,11 +246,22 @@ var config = {
     _.extend(req.params, req.query);
 
     req.params.dbname = conf.database.database_name;
+    req.inat = {
+      // zooms 0 and 1 use the cached for zoom level 2, just show more cells
+      cacheTable: "observation_zooms_" + ((req.params.z < 2) ? 2 : req.params.z)
+    };
 
     Step(
       function loadTaxonForTaxonFilter() {
         if (req.params.taxon_id) {
           loadTaxon(req, this);
+        } else {
+          return req;
+        }
+      },
+      function loadMaxCountForGrid(err, req) {
+        if (req.params.endpoint === "grid") {
+          loookupMaxCountForGrid(req, this);
         } else {
           return req;
         }
@@ -282,10 +275,6 @@ var config = {
           gridRequest(req, this);
         } else if (req.params.endpoint === "points") { // Points endpoint
           pointsRequest(req, this);
-        // } else if (req.params.endpoint === "precisions") {
-        //   pointPrecisionsRequest(req, this);
-        // } else if (req.params.endpoint === "timeline") {
-        //   timelineRequest(req, this);
         } else {
           // just a precaution to try and prevent sql injection
           req.params.sql = "(SELECT geom FROM observations WHERE 1 = 2) AS foo";
@@ -307,7 +296,6 @@ var config = {
           y = y >= 0 ? y : maxCoord + y;
           if (x > maxCoord) { x = x % numTiles; }
           if (x < -1 * maxCoord) { x = Math.abs(x) % numTiles; }
-          if (y < -1 * maxCoord) { y = Math.abs(y) % numTiles; }
           req.params.x = x.toString();
           req.params.y = y.toString();
           req.params.z = z.toString();
@@ -329,21 +317,37 @@ var config = {
   }
 };
 
-// Initialize tile server on port conf.application.listen_port
-var ws = new Windshaft.Server(config);
-
-if (cluster.isMaster && conf.application.number_of_threads) {
-  // create as many workers as conf.application.number_of_threads
-  for (var i = 0; i < conf.application.number_of_threads; i++) {
-    cluster.fork();
+function stylesFromMaxCount(maximumCount) {
+  var i, logTransformedCount, opacity;
+  var numberOfStyles = 10;
+  var minOpacity = .2;
+  // Set the upper value twice as high in case the counts grow and the
+  // lower value remains cached. That would create cells in the default color
+  var styles = "[count<=" + (maximumCount * 2) + "] " +
+    "{ polygon-fill: {{color}}; polygon-opacity:1.0; } ";
+  // add more styles based on a log transform of the maximum count
+  var maxLoggedCount = Math.log(maximumCount);
+  for (i = (numberOfStyles - 1) ; i > 0 ; i--) {
+    logTransformedCount = Math.round(Math.pow(Math.E, (maxLoggedCount/numberOfStyles) * i));
+    opacity = (((i/numberOfStyles) * (1 - minOpacity)) + minOpacity).toFixed(2);
+    styles += "[count<" + logTransformedCount + "] { polygon-fill: " +
+      "{{color}}; polygon-opacity:" + opacity + "; } ";
   }
-  cluster.on("exit", function(worker, code, signal) {
-    console.log("worker " + worker.process.pid + " died");
-  });
-} else {
+  return styles;
+}
+
+function startServer() {
+  var ws = new Windshaft.Server(config);
+  // Initialize tile server on port conf.application.listen_port
   var port = Number(process.env.PORT || conf.application.listen_port);
   ws.listen(port, function() {
     console.log("map tiles are now being served out of: http://localhost:" +
       conf.application.listen_port + config.base_url + "/:z/:x/:y");
   });
 }
+
+// Initialize the database connection and start the server
+pgClient = new pg.Client(pgConfig);
+pgClient.connect(function(err, pgClient) {
+  startServer();
+});
