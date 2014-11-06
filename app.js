@@ -33,7 +33,9 @@ var pointQuery = squel.select()
   .field("o.captive")
   .field("o.quality_grade")
   .from("observations o")
-  .where("o.mappable = true");
+  .where("o.mappable = true")
+  .where("o.private_latitude IS NULL")
+  .where("o.private_longitude IS NULL");
 
 var gridSnapQueryDenormalized = squel.select()
   .field("count")
@@ -42,10 +44,10 @@ var gridSnapQueryDenormalized = squel.select()
 
 var defaultStylePoints =
   "#observations {" +
-  "marker-fill: {{color}}; " +
+  "marker-fill: #585858; " +
   "marker-opacity: 1;" +
   "marker-width: 8;" +
-  "marker-line-color: {{outline_color}};" +
+  "marker-line-color: #D8D8D8;" +
   "marker-line-width: 2;" +
   "marker-line-opacity: 0.9;" +
   "marker-placement: point;" +
