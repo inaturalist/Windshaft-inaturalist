@@ -62,9 +62,9 @@ var defaultStylePoints =
   "#observations {" +
   "marker-fill: #585858; " +
   "marker-opacity: 1;" +
-  "marker-width: 8;" +
+  "marker-width: 5;" +
   "marker-line-color: #D8D8D8;" +
-  "marker-line-width: 2;" +
+  "marker-line-width: 1.5;" +
   "marker-line-opacity: 0.9;" +
   "marker-placement: point;" +
   "marker-type: ellipse;" +
