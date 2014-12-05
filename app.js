@@ -42,6 +42,22 @@ var gridSnapQueryDenormalized = squel.select()
   .field("geom")
   .from("{{cacheTable}}");
 
+var gridQuery = squel.select()
+  .field("count")
+  .field(
+    "ST_Envelope(" +
+      "ST_GEOMETRYFROMTEXT('LINESTRING('||(st_xmax(the_geom)-({{seed}}/2))||' '||(st_ymax(the_geom)-({{seed}}/2))||','||(st_xmax(the_geom)+({{seed}}/2))||' '||(st_ymax(the_geom)+({{seed}}/2))||')',4326)"+
+    ") AS geom"
+  )
+var gridSnapQuery = squel.select()
+  .field("count(*) as count")
+  .field("ST_SnapToGrid(o.geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}}) AS the_geom")
+  .from("observations o")
+  .where("o.mappable = true")
+  .where("o.private_latitude IS NULL")
+  .where("o.private_longitude IS NULL")
+  .group("ST_SnapToGrid(o.geom, 0+({{seed}}/2), 75+({{seed}}/2), {{seed}}, {{seed}})")
+
 var defaultStylePoints =
   "#observations {" +
   "marker-fill: #585858; " +
@@ -76,7 +92,7 @@ var defaultStyleGrid =
   "polygon-opacity:0.6; " +
   "line-opacity:0.2; " +
   "line-color:#FFFFFF; " +
-  "{{styleCounts}}"
+  "{{styleCounts}}";
 
 var defaultStyleCounts =
   "[count>=45] { polygon-fill: {{color}}; polygon-opacity:1.0; } " +
@@ -91,18 +107,26 @@ function gridRequest(req, callback) {
   if (req && parseInt(req.params.z) > conf.application.max_zoom_level_for_grids) {
     return callback("Unable to process grid requests for this zoom level");
   }
-  var sq;
-  if (req.inat && req.inat.taxon) {
-    sq = gridSnapQueryDenormalized.clone().where("taxon_id = " + req.inat.taxon.id);
+  if (req.params.user_id || req.params.place_id || req.params.project_id) {
+    var outerQuery = gridQuery.clone(),
+      innerQuery = gridSnapQuery.clone();
+    addTaxonFilter(innerQuery, req);
+    addUserFilter(innerQuery, req);
+    addPlaceFilter(innerQuery, req);
+    addProjectFilter(innerQuery, req);
+    outerQuery.from("(" + innerQuery.toString() + ") AS snap_grid")
+    req.params.sql = "(" + outerQuery.toString() + ") AS obs_grid"
+    req.params.sql = req.params.sql.replace(/\{\{seed\}\}/g, requestSeed(req));
   } else {
-    sq = gridSnapQueryDenormalized.clone().where("taxon_id IS NULL");
+    var denormalizedQuery = gridSnapQueryDenormalized.clone();
+    addTaxonCondition(denormalizedQuery, req);
+    req.params.sql = "(" + denormalizedQuery.toString() + ") AS snap_grid";
+    req.params.sql = req.params.sql.replace(/\{\{cacheTable\}\}/g, req.inat.cacheTable);
   }
-  req.params.sql = "(" + sq.toString() + ") AS snap_grid";
-  req.params.sql = req.params.sql.replace(/\{\{cacheTable\}\}/g, req.inat.cacheTable);
   if (!req.params.style) {
     req.params.style = defaultStyleGrid;
   }
-  if (req.inat && req.inat.maximumCount) {
+  if (req.inat.maximumCount) {
     req.params.style = req.params.style.replace(/\{\{styleCounts\}\}/g,
       stylesFromMaxCount(req.inat.maximumCount) + "}");
   } else {
@@ -127,12 +151,10 @@ function commonPointRequest(req, query, callback) {
   if (req && parseInt(req.params.z) < conf.application.min_zoom_level_for_points) {
     return callback("Unable to process point requests for this zoom level");
   }
-  if (req.inat && req.inat.taxon) {
-    query
-      .join("taxon_ancestors ta", null, "ta.taxon_id = o.taxon_id")
-      .where(
-        "ta.ancestor_taxon_id = " + req.inat.taxon.id);
-  }
+  addTaxonFilter(query, req);
+  addUserFilter(query, req);
+  addPlaceFilter(query, req);
+  addProjectFilter(query, req);
   if (req.params.obs_id) {
     query.where("o.id != " + req.params.obs_id);
   }
@@ -149,58 +171,51 @@ function commonPointRequest(req, query, callback) {
   callback(null, req);
 }
 
-// function timelineRequest(req, callback) {
-//   req.params.sql = "(SELECT id, observed_on, species_guess, iconic_taxon_id, taxon_id, latitude, longitude, geom, " +
-//     "positional_accuracy, captive, quality_grade FROM " +
-//     "observations o WHERE TO_CHAR(observed_on,'YYYY-MM') = '{{date_up}}') as observations";
-//   if (req.params.date_up === "undefined") {
-//     req.params.date_up = "2010-01-01";
-//   }
-//   req.params.sql = req.params.sql.replace(/\{\{date_up\}\}/g, req.params.date_up);
-//   req.params.style =  "#observations {" +
-//     "marker-fill: {{color}}; " +
-//     "marker-opacity: 1;" +
-//     "marker-width: 8;" +
-//     "marker-line-color: white;" +
-//     "marker-line-width: 2;" +
-//     "marker-line-opacity: 0.9;" +
-//     "marker-placement: point;" +
-//     "marker-type: ellipse;" +
-//     "marker-allow-overlap: true; " +
-//     "}";
-//   if (req.params.color === "undefined") {
-//     req.params.style = req.params.style.replace(/\{\{color\}\}/g, "#1E90FF");
-//   } else {
-//     req.params.style = req.params.style.replace(/\{\{color\}\}/g, req.params.color);
-//   }
-//   req.params.interactivity="id";
-//   callback(null, req);
-// }
-
 var loookupMaxCountForGrid = function(req, callback) {
-  var taxonID = req.params.taxon_id;
-  var taxonIDClause = taxonID ? "= " + taxonID : "IS NULL";
-  cachedMaxCounts[taxonID] = cachedMaxCounts[taxonID] || { }
-  // If we have looked up the max cell count for this taxon / zoom, return it
-  if (cachedMaxCounts[taxonID][req.inat.cacheTable]) {
-    req.inat.maximumCount = cachedMaxCounts[taxonID][req.inat.cacheTable];
+  var cacheKey = [
+    req.params.taxon_id,
+    req.params.user_id,
+    req.params.place_id,
+    req.params.project_id,
+    req.inat.cacheTable
+  ].toString();
+  // If we have looked up the max cell count for these parameters, return it
+  if (cachedMaxCounts[cacheKey]) {
+    req.inat.maximumCount = cachedMaxCounts[cacheKey];
     return callback(null, req);
   }
   Step(
     function() {
-      pgClient.query("SELECT MAX(count) as max FROM " + req.inat.cacheTable +
-        " WHERE taxon_id " + taxonIDClause, this);
+      var countQuery = squel.select();
+      if (req.params.user_id || req.params.place_id || req.params.project_id) {
+        var outerQuery = gridQuery.clone(),
+          innerQuery = gridSnapQuery.clone();
+        addTaxonFilter(innerQuery, req);
+        addUserFilter(innerQuery, req);
+        addPlaceFilter(innerQuery, req);
+        addProjectFilter(innerQuery, req);
+        outerQuery.from("(" + innerQuery.toString() + ") AS snap_grid");
+        var wrapperQuery = "("+ outerQuery.toString() +") AS obs_grid";
+        wrapperQuery = wrapperQuery.replace(/\{\{seed\}\}/g, requestSeed(req));
+        countQuery.field("MAX(count) as max")
+          .from(wrapperQuery);
+      } else {
+        countQuery.field("MAX(count) as max")
+         .from(req.inat.cacheTable);
+        addTaxonCondition(countQuery, req);
+      }
+      pgClient.query(countQuery.toString(), this);
     },
     function handleResult(err, result) {
       if (err) { console.error("error running query", err); }
       if (result && result.rows.length > 0) {
         req.inat.maximumCount = result.rows[0].max;
-        cachedMaxCounts[taxonID][req.inat.cacheTable] = result.rows[0].max;
+        cachedMaxCounts[cacheKey] = result.rows[0].max;
       }
       callback(null, req);
     }
   );
-}
+};
 
 var loadTaxon = function(req, callback) {
   var taxonID = req.params.taxon_id;
@@ -319,10 +334,50 @@ var config = {
   }
 };
 
+function requestSeed(req) {
+  var seed = 16 / Math.pow(2, parseInt(req.params.z));
+  if (seed > 4) seed = 4;
+  else if (seed == 1) seed = 0.99;
+  return seed;
+}
+
+function addTaxonFilter(query, req) {
+  if (req.inat.taxon) {
+    query.join("taxon_ancestors ta", null, "ta.taxon_id = o.taxon_id")
+         .where("ta.ancestor_taxon_id = " + req.inat.taxon.id);
+  }
+}
+
+function addTaxonCondition(query, req) {
+  taxonIDClause = req.params.taxon_id ? "= " + req.params.taxon_id : "IS NULL";
+  query.where("taxon_id " + taxonIDClause);
+}
+
+function addUserFilter(query, req) {
+  if (req.params.user_id) {
+    query.join("users u", null, "o.user_id = u.id")
+      .where("u.id = " + req.params.user_id);
+  }
+}
+
+function addPlaceFilter(query, req) {
+  if (req.params.place_id) {
+    query.join("place_geometries pg", null, "(ST_Intersects(pg.geom, o.private_geom))")
+      .where("pg.place_id = " + req.params.place_id);
+  }
+}
+
+function addProjectFilter(query, req) {
+  if (req.params.project_id) {
+    query.join("project_observations po", null, "o.id = po.observation_id")
+      .where("po.project_id = " + req.params.project_id);
+  }
+}
+
 function stylesFromMaxCount(maximumCount) {
   var i, logTransformedCount, opacity;
   var numberOfStyles = 10;
-  var minOpacity = .2;
+  var minOpacity = 0.2;
   // Set the upper value twice as high in case the counts grow and the
   // lower value remains cached. That would create cells in the default color
   var styles = "[count<=" + (maximumCount * 2) + "] " +
