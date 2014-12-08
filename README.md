@@ -34,10 +34,9 @@ taxon_id||integer|grid data is restricted to observations of this taxon or taxon
 user_id||integer|grid data is restricted to observations by this user
 place_id||integer|grid data is restricted to observations in this place
 project_id||integer|grid data is restricted to observations in this project
-color||integer|HTML-escaped HEX color code (e.g. %23000000 for black). By default, colors will be [based on the taxon](http://www.inaturalist.org/pages/help#mapsymbols).
+color||string|HTML-escaped HEX color code (e.g. %23000000 for black). By default, colors will be [based on the taxon](http://www.inaturalist.org/pages/help#mapsymbols).
 ttl||integer|Number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 3600 (1 hour)
 
----
 ### Render Point Tile
 Render a PNG tile with points showing every observation matching the request parameters. Colors are [based on the taxon represented](http://www.inaturalist.org/pages/help#mapsymbols).
 ```
@@ -56,7 +55,6 @@ place_id||integer|points are restricted to observations in this place
 project_id||integer|points are restricted to observations in this project
 ttl||integer|Number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 3600 (1 hour)
 
----
 ### Grid Tile Counts
 Return a JSON file listing the counts of each cell from the grid tile method. Format is based on [UTFGrid](https://github.com/mapbox/utfgrid-spec), as used by [MapBox](https://www.mapbox.com/foundations/an-open-platform/#utfgrid)
 ```
@@ -69,7 +67,7 @@ Name | Required | Type | Description
 x|**true**|integer|X value in XYZ tiling scheme
 y|**true**|integer|Y value in XYZ tiling scheme
 z|**true**|integer|Z value in XYZ tiling scheme
-interactivity|**true**|integer|count is currently the only accepted value
+interactivity|**true**|string|count is currently the only accepted value
 taxon_id||integer|grid data is restricted to observations of this taxon or taxonomic group
 user_id||integer|grid data is restricted to observations by this user
 place_id||integer|grid data is restricted to observations in this place
