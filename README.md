@@ -32,9 +32,10 @@ y|**true**|integer|Y value in XYZ tiling scheme
 z|**true**|integer|Z value in XYZ tiling scheme (the zoom level)
 taxon_id||integer|grid data is restricted to observations of this taxon or taxonomic group
 user_id||integer|grid data is restricted to observations by this user
-place_id||integer|grid data is restricted to observations in this project
+place_id||integer|grid data is restricted to observations in this place
 project_id||integer|grid data is restricted to observations in this project
 color||integer|HTML-escaped HEX color code (e.g. %23000000 for black). By default, colors will be [based on the taxon](http://www.inaturalist.org/pages/help#mapsymbols).
+ttl||integer|Number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 3600 (1 hour)
 
 ---
 ### Render Point Tile
@@ -48,11 +49,12 @@ Name | Required | Type | Description
 -----|----------|------|-------------
 x|**true**|integer|X value in XYZ tiling scheme
 y|**true**|integer|Y value in XYZ tiling scheme
-z|**true**|integer|Z value in XYZ tiling scheme (the zoom level)
+z|**true**|integer|Z value in XYZ tiling scheme
 taxon_id||integer|points are restricted to observations of this taxon or taxonomic group
 user_id||integer|points are restricted to observations by this user
-place_id||integer|points are restricted to observations in this project
+place_id||integer|points are restricted to observations in this place
 project_id||integer|points are restricted to observations in this project
+ttl||integer|Number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 3600 (1 hour)
 
 ---
 ### Grid Tile Counts
@@ -66,13 +68,10 @@ Name | Required | Type | Description
 -----|----------|------|-------------
 x|**true**|integer|X value in XYZ tiling scheme
 y|**true**|integer|Y value in XYZ tiling scheme
-z|**true**|integer|Z value in XYZ tiling scheme (the zoom level)
+z|**true**|integer|Z value in XYZ tiling scheme
 interactivity|**true**|integer|count is currently the only accepted value
-taxon_id||integer|points are restricted to observations of this taxon or taxonomic group
-user_id||integer|points are restricted to observations by this user
-place_id||integer|points are restricted to observations in this project
-project_id||integer|points are restricted to observations in this project
-
-
-
-
+taxon_id||integer|grid data is restricted to observations of this taxon or taxonomic group
+user_id||integer|grid data is restricted to observations by this user
+place_id||integer|grid data is restricted to observations in this place
+project_id||integer|grid data is restricted to observations in this project
+ttl||integer|Number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 3600 (1 hour)
