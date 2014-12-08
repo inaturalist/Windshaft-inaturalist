@@ -24,6 +24,7 @@ Render a PNG tile summarizing the total number of observations matching the requ
 /observations/grid/:z/:x/:y.png
 ```
 **Parameters**
+
 Name | Required | Type | Description
 -----|----------|------|-------------
 x|**true**|integer|X value in XYZ tiling scheme
@@ -42,6 +43,7 @@ Render a PNG tile with points showing every observation matching the request par
 /observations/points/:z/:x/:y.png
 ```
 **Parameters**
+
 Name | Required | Type | Description
 -----|----------|------|-------------
 x|**true**|integer|X value in XYZ tiling scheme
@@ -59,6 +61,7 @@ Return a JSON file listing the counts of each cell from the grid tile method. Fo
 /observations/grid/:z/:x/:y.grid.json?interactivity=count
 ```
 **Parameters**
+
 Name | Required | Type | Description
 -----|----------|------|-------------
 x|**true**|integer|X value in XYZ tiling scheme
