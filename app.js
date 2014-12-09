@@ -1,11 +1,13 @@
-var Windshaft = require("windshaft");
-var _         = require("underscore");
-var one       = require("onecolor");
-var squel     = require("squel");
-var conf      = require("./config");
-var Step      = require("step");
-var pg        = require("pg");
-var cluster   = require("cluster");
+var Windshaft   = require("windshaft");
+var _           = require("underscore");
+var one         = require("onecolor");
+var squel       = require("squel");
+var conf        = require("./config");
+var Step        = require("step");
+var pg          = require("pg");
+var cluster     = require("cluster");
+var inaturalist = require('./lib/inaturalist');
+
 
 var cachedMaxCounts = { };
 var pgClient;
@@ -115,16 +117,16 @@ function gridRequest(req, callback) {
   if (req.params.user_id || req.params.place_id || req.params.project_id) {
     var outerQuery = gridQuery.clone(),
       innerQuery = gridSnapQuery.clone();
-    addTaxonFilter(innerQuery, req);
-    addUserFilter(innerQuery, req);
-    addPlaceFilter(innerQuery, req);
-    addProjectFilter(innerQuery, req);
+    inaturalist.addTaxonFilter(innerQuery, req);
+    inaturalist.addUserFilter(innerQuery, req);
+    inaturalist.addPlaceFilter(innerQuery, req);
+    inaturalist.addProjectFilter(innerQuery, req);
     outerQuery.from("(" + innerQuery.toString() + ") AS snap_grid")
     req.params.sql = "(" + outerQuery.toString() + ") AS obs_grid"
-    req.params.sql = req.params.sql.replace(/\{\{seed\}\}/g, requestSeed(req));
+    req.params.sql = req.params.sql.replace(/\{\{seed\}\}/g, inaturalist.requestSeed(req));
   } else {
     var denormalizedQuery = gridSnapQueryDenormalized.clone();
-    addTaxonCondition(denormalizedQuery, req);
+    inaturalist.addTaxonCondition(denormalizedQuery, req);
     req.params.sql = "(" + denormalizedQuery.toString() + ") AS snap_grid";
     req.params.sql = req.params.sql.replace(/\{\{cacheTable\}\}/g, req.inat.cacheTable);
   }
@@ -133,7 +135,7 @@ function gridRequest(req, callback) {
   }
   if (req.inat.maximumCount) {
     req.params.style = req.params.style.replace(/\{\{styleCounts\}\}/g,
-      stylesFromMaxCount(req.inat.maximumCount) + "}");
+      inaturalist.stylesFromMaxCount(req.inat.maximumCount) + "}");
   } else {
     req.params.style = req.params.style.replace(/\{\{styleCounts\}\}/g, defaultStyleCounts);
   }
@@ -156,10 +158,10 @@ function commonPointRequest(req, query, callback) {
   if (req && parseInt(req.params.z) < conf.application.min_zoom_level_for_points) {
     return callback("Unable to process point requests for this zoom level");
   }
-  addTaxonFilter(query, req);
-  addUserFilter(query, req);
-  addPlaceFilter(query, req);
-  addProjectFilter(query, req);
+  inaturalist.addTaxonFilter(query, req);
+  inaturalist.addUserFilter(query, req);
+  inaturalist.addPlaceFilter(query, req);
+  inaturalist.addProjectFilter(query, req);
   if (req.params.obs_id) {
     query.where("o.id != " + req.params.obs_id);
   }
@@ -195,19 +197,19 @@ var loookupMaxCountForGrid = function(req, callback) {
       if (req.params.user_id || req.params.place_id || req.params.project_id) {
         var outerQuery = gridQuery.clone(),
           innerQuery = gridSnapQuery.clone();
-        addTaxonFilter(innerQuery, req);
-        addUserFilter(innerQuery, req);
-        addPlaceFilter(innerQuery, req);
-        addProjectFilter(innerQuery, req);
+        inaturalist.addTaxonFilter(innerQuery, req);
+        inaturalist.addUserFilter(innerQuery, req);
+        inaturalist.addPlaceFilter(innerQuery, req);
+        inaturalist.addProjectFilter(innerQuery, req);
         outerQuery.from("(" + innerQuery.toString() + ") AS snap_grid");
         var wrapperQuery = "("+ outerQuery.toString() +") AS obs_grid";
-        wrapperQuery = wrapperQuery.replace(/\{\{seed\}\}/g, requestSeed(req));
+        wrapperQuery = wrapperQuery.replace(/\{\{seed\}\}/g, inaturalist.requestSeed(req));
         countQuery.field("MAX(count) as max")
           .from(wrapperQuery);
       } else {
         countQuery.field("MAX(count) as max")
          .from(req.inat.cacheTable);
-        addTaxonCondition(countQuery, req);
+        inaturalist.addTaxonCondition(countQuery, req);
       }
       pgClient.query(countQuery.toString(), this);
     },
@@ -339,65 +341,6 @@ var config = {
     callback(null, tile, headers);
   }
 };
-
-function requestSeed(req) {
-  var seed = 16 / Math.pow(2, parseInt(req.params.z));
-  if (seed > 4) seed = 4;
-  else if (seed == 1) seed = 0.99;
-  return seed;
-}
-
-function addTaxonFilter(query, req) {
-  if (req.inat.taxon) {
-    query.join("taxon_ancestors ta", null, "ta.taxon_id = o.taxon_id")
-         .where("ta.ancestor_taxon_id = " + req.inat.taxon.id);
-  }
-}
-
-function addTaxonCondition(query, req) {
-  taxonIDClause = req.params.taxon_id ? "= " + req.params.taxon_id : "IS NULL";
-  query.where("taxon_id " + taxonIDClause);
-}
-
-function addUserFilter(query, req) {
-  if (req.params.user_id) {
-    query.join("users u", null, "o.user_id = u.id")
-      .where("u.id = " + req.params.user_id);
-  }
-}
-
-function addPlaceFilter(query, req) {
-  if (req.params.place_id) {
-    query.join("place_geometries pg", null, "(ST_Intersects(pg.geom, o.private_geom))")
-      .where("pg.place_id = " + req.params.place_id);
-  }
-}
-
-function addProjectFilter(query, req) {
-  if (req.params.project_id) {
-    query.join("project_observations po", null, "o.id = po.observation_id")
-      .where("po.project_id = " + req.params.project_id);
-  }
-}
-
-function stylesFromMaxCount(maximumCount) {
-  var i, logTransformedCount, opacity;
-  var numberOfStyles = 10;
-  var minOpacity = 0.2;
-  // Set the upper value twice as high in case the counts grow and the
-  // lower value remains cached. That would create cells in the default color
-  var styles = "[count<=" + (maximumCount * 2) + "] " +
-    "{ polygon-fill: {{color}}; polygon-opacity:1.0; } ";
-  // add more styles based on a log transform of the maximum count
-  var maxLoggedCount = Math.log(maximumCount);
-  for (i = (numberOfStyles - 1) ; i > 0 ; i--) {
-    logTransformedCount = Math.round(Math.pow(Math.E, (maxLoggedCount/numberOfStyles) * i));
-    opacity = (((i/numberOfStyles) * (1 - minOpacity)) + minOpacity).toFixed(2);
-    styles += "[count<" + logTransformedCount + "] { polygon-fill: " +
-      "{{color}}; polygon-opacity:" + opacity + "; } ";
-  }
-  return styles;
-}
 
 function startServer() {
   var ws = new Windshaft.Server(config);

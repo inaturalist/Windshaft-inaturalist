@@ -4,7 +4,7 @@
   "description": "Wrapper around Windshaft to provide a map tiler for iNaturalist.",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "istanbul cover ./node_modules/mocha/bin/_mocha -- -R spec"
   },
   "repository": {
     "type": "git",
@@ -21,5 +21,10 @@
     "squel": "~3.9.1",
     "step": "~0.0.5",
     "pg": "~3.6.2"
+  },
+  "devDependencies": {
+    "mocha": "^2.0.1",
+    "chai": "^1.10.0",
+    "istanbul": "^0.3.5"
   }
 }
