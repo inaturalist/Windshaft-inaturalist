@@ -16,6 +16,9 @@ npm install
 ## Run
 node app.js
 
+## Run Tests
+npm test
+
 ## API
 
 ### Render Grid Tile
