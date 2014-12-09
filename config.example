@@ -15,6 +15,9 @@ config.application.max_zoom_level_for_grids = 12;
 config.application.min_zoom_level_for_points = 9;
 config.application.cache_max_age = "3600";
 
+config.application.debug_function = console.log;
+config.application.error_function = console.error;
+
 // database connection params
 // The database user
 config.database.user = "agusti";
