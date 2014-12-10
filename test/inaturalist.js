@@ -76,10 +76,10 @@ describe( "inaturalist", function( ) {
     });
 
     it( "sets the color based on parameter", function( done ) {
-      req.params.color = "#AAAAAA";
-      expect( req.params.style ).to.not.include( "#AAAAAA" );
+      req.params.color = "#ABCDEF";
+      expect( req.params.style ).to.not.include( "#ABCDEF" );
       inaturalist.gridRequest( req, function( ) {
-        expect( req.params.style ).to.include( "#AAAAAA" );
+        expect( req.params.style ).to.include( "#ABCDEF" );
         done( );
       });
     });
@@ -187,7 +187,7 @@ describe( "inaturalist", function( ) {
       inaturalist.req2params( req, function( ) {
         expect( req.params.sql ).to.equal(
           "(SELECT geom FROM observations WHERE 1 = 2) AS foo" );
-        done();
+        done( );
       });
     });
 
@@ -196,7 +196,7 @@ describe( "inaturalist", function( ) {
       inaturalist.req2params( req, function( ) {
         expect( req.params.sql ).to.equal(
           "(SELECT count, geom FROM observation_zooms_2 WHERE (taxon_id IS NULL)) AS snap_grid" );
-        done();
+        done( );
       });
     });
 
@@ -206,7 +206,7 @@ describe( "inaturalist", function( ) {
       inaturalist.req2params( req, function( ) {
         expect( req.params.sql ).to.equal(
           "(SELECT count, geom FROM observation_zooms_2 WHERE (taxon_id = 1)) AS snap_grid" );
-        done();
+        done( );
       });
     });
 
@@ -215,7 +215,7 @@ describe( "inaturalist", function( ) {
       req.params.endpoint = "points";
       inaturalist.req2params( req, function( ) {
         expect( req.params.sql ).to.include( "AS points" );
-        done();
+        done( );
       });
     });
   });
