@@ -1,8 +1,20 @@
 var squel = require( "squel" ),
     expect = require( "chai" ).expect,
     inaturalist = require( "../lib/inaturalist" ),
+    conf = require("../config"),
     req, query,
     emptyRequest = { inat: { }, params: { } };
+
+var assertError = function( err ) {
+  expect( err ).to.include( "[ERROR]" );
+};
+
+var assertDebug = function( debug ) {
+  expect( debug ).to.include( "[DEBUG]" );
+};
+
+inaturalist.setErrorCallback( assertError );
+inaturalist.setDebugCallback( assertDebug );
 
 describe( "inaturalist", function( ) {
 
@@ -33,6 +45,15 @@ describe( "inaturalist", function( ) {
         expect( req.inat.taxon.id ).to.equal( 1 );
         expect( req.inat.taxon.name ).to.equal( "Animalia" );
         expect( req.inat.taxon.rank ).to.equal( "kingdom" );
+        done( );
+      });
+    });
+
+    it( "throws an error when a query fails", function( done ) {
+      var req = { inat: { }, params: { taxon_id: 'abcd' } };
+      expect( req.inat.taxon ).to.be.undefined;
+      inaturalist.loadTaxon( req, function( ) {
+        expect( req.inat.taxon ).to.be.undefined;
         done( );
       });
     });
@@ -68,7 +89,7 @@ describe( "inaturalist", function( ) {
       req.inat.maximumCount = 1000;
       inaturalist.gridRequest( req, function( ) {
         expect( req.params.style ).to.include(
-          "[count<=2000] { polygon-fill: #333333; polygon-opacity:1.0; }" );
+          "[count<=2000] { polygon-fill: #333333; polygon-opacity:1; }" );
         expect( req.params.style ).to.include(
           "[count<2] { polygon-fill: #333333; polygon-opacity:0.28; }" );
         done( );
@@ -129,6 +150,15 @@ describe( "inaturalist", function( ) {
         done( );
       });
     });
+
+    it( "can set an overriding color", function( done ) {
+      req.params.color = "#ABCDEF";
+      inaturalist.pointsRequest( req, function( err ) {
+        expect( req.params.style ).to.include(
+          "[zoom >= 0] { marker-fill: #ABCDEF; }" );
+        done( );
+      });
+    });
   });
 
   describe( "lookupMaxCountForGrid", function( ) {
@@ -176,6 +206,15 @@ describe( "inaturalist", function( ) {
         done( );
       });
     });
+
+    it( "throws an error when the query fails", function( done ) {
+      req.inat.cacheTable = "dummy_table";
+      expect( req.inat.maximumCount ).to.be.undefined;
+      inaturalist.lookupMaxCountForGrid( req, function( ) {
+        expect( req.inat.maximumCount ).to.be.undefined;
+        done( );
+      });
+    });
   });
 
   describe( "req2params", function( ) {
@@ -191,8 +230,19 @@ describe( "inaturalist", function( ) {
       });
     });
 
+    it( "runs a dummy query when there is a wrong endpoint", function( done ) {
+      req.params.table = "observations";
+      req.params.endpoint_or_id = "somethingOtherThanGridOrPoints";
+      inaturalist.req2params( req, function( ) {
+        expect( req.params.sql ).to.equal(
+          "(SELECT geom FROM observations WHERE 1 = 2) AS foo" );
+        done( );
+      });
+    });
+
     it( "passes off to the grid endpoint", function( done ) {
-      req.params.endpoint = "grid";
+      req.params.table = "observations";
+      req.params.endpoint_or_id = "grid";
       inaturalist.req2params( req, function( ) {
         expect( req.params.sql ).to.equal(
           "(SELECT count, geom FROM observation_zooms_2 WHERE (taxon_id IS NULL)) AS snap_grid" );
@@ -201,7 +251,8 @@ describe( "inaturalist", function( ) {
     });
 
     it( "filters by taxon", function( done ) {
-      req.params.endpoint = "grid";
+      req.params.table = "observations";
+      req.params.endpoint_or_id = "grid";
       req.params.taxon_id = 1;
       inaturalist.req2params( req, function( ) {
         expect( req.params.sql ).to.equal(
@@ -212,9 +263,44 @@ describe( "inaturalist", function( ) {
 
     it( "passes off to the points endpoint", function( done ) {
       req.params.z = 12;
-      req.params.endpoint = "points";
+      req.params.table = "observations";
+      req.params.endpoint_or_id = "points";
       inaturalist.req2params( req, function( ) {
         expect( req.params.sql ).to.include( "AS points" );
+        done( );
+      });
+    });
+
+    it( "passes off to the places endpoint", function( done ) {
+      req.params.z = 12;
+      req.params.table = "places";
+      req.params.endpoint_or_id = 1;
+      inaturalist.req2params( req, function( ) {
+        expect( req.params.sql ).to.equal(
+          "(SELECT geom FROM place_geometries WHERE (place_id=1)) AS place" );
+        done( );
+      });
+    });
+
+    it( "passes off to the taxon_ranges endpoint", function( done ) {
+      req.params.z = 12;
+      req.params.table = "taxon_ranges";
+      req.params.endpoint_or_id = 1;
+      inaturalist.req2params( req, function( ) {
+        expect( req.params.sql ).to.equal(
+          "(SELECT geom FROM taxon_ranges WHERE (taxon_id=1)) AS taxon_range" );
+        done( );
+      });
+    });
+
+    it( "passes off to the taxon_ranges endpoint", function( done ) {
+      inaturalist.setDebug( true );
+      req.params.table = "observations";
+      req.params.endpoint_or_id = "grid";
+      req.params.taxon_id = 1;
+      inaturalist.req2params( req, function( ) {
+        expect( req.params.sql ).to.equal(
+          "(SELECT count, geom FROM observation_zooms_2 WHERE (taxon_id = 1)) AS snap_grid" );
         done( );
       });
     });
@@ -242,6 +328,21 @@ describe( "inaturalist", function( ) {
       req.params.x = -20;
       inaturalist.finalizeRequest( null, req );
       expect( req.params.x ).to.equal( "5" );
+    });
+
+    it( "updates Y coordinate when too low", function( ) {
+      req.params.y = -2;
+      inaturalist.finalizeRequest( null, req );
+      expect( req.params.y ).to.equal( "5" );
+    });
+
+    // this isn't a great test. We want to test an error is thrown, which means
+    // calling assertDebug. You can really only find out in the code coverage
+    // report. We can however confirm the integer 1 doesn't get turned into a string
+    it( "throws an error when there is one", function( ) {
+      expect( req.params.x ).to.equal( 1 );
+      inaturalist.finalizeRequest( "err", req );
+      expect( req.params.x ).to.equal( 1 );
     });
   });
 
@@ -350,17 +451,58 @@ describe( "inaturalist", function( ) {
     it( "creates the right styles for a maximum value", function( ) {
       var styles = inaturalist.stylesFromMaxCount( "10000" );
       expect( styles ).to.equal(
-        "[count<=20000] { polygon-fill: {{color}}; polygon-opacity:1.0; } " +
+        "[count<=20000] { polygon-fill: {{color}}; polygon-opacity:1; } " +
         "[count<3981] { polygon-fill: {{color}}; polygon-opacity:0.92; } " +
         "[count<1585] { polygon-fill: {{color}}; polygon-opacity:0.84; } " +
         "[count<631] { polygon-fill: {{color}}; polygon-opacity:0.76; } " +
         "[count<251] { polygon-fill: {{color}}; polygon-opacity:0.68; } " +
-        "[count<100] { polygon-fill: {{color}}; polygon-opacity:0.60; } " +
+        "[count<100] { polygon-fill: {{color}}; polygon-opacity:0.6; } " +
         "[count<40] { polygon-fill: {{color}}; polygon-opacity:0.52; } " +
         "[count<16] { polygon-fill: {{color}}; polygon-opacity:0.44; } " +
         "[count<6] { polygon-fill: {{color}}; polygon-opacity:0.36; } " +
         "[count<3] { polygon-fill: {{color}}; polygon-opacity:0.28; } " );
     });
+
+    it( "adjusts styles for other opacities", function( ) {
+      var styles = inaturalist.stylesFromMaxCount( "10000", 0.5 );
+      expect( styles ).to.equal(
+        "[count<=20000] { polygon-fill: {{color}}; polygon-opacity:0.5; } " +
+        "[count<3981] { polygon-fill: {{color}}; polygon-opacity:0.46; } " +
+        "[count<1585] { polygon-fill: {{color}}; polygon-opacity:0.42; } " +
+        "[count<631] { polygon-fill: {{color}}; polygon-opacity:0.38; } " +
+        "[count<251] { polygon-fill: {{color}}; polygon-opacity:0.34; } " +
+        "[count<100] { polygon-fill: {{color}}; polygon-opacity:0.3; } " +
+        "[count<40] { polygon-fill: {{color}}; polygon-opacity:0.26; } " +
+        "[count<16] { polygon-fill: {{color}}; polygon-opacity:0.22; } " +
+        "[count<6] { polygon-fill: {{color}}; polygon-opacity:0.18; } " +
+        "[count<3] { polygon-fill: {{color}}; polygon-opacity:0.14; } " );
+    });
   });
 
+  describe( "beforeTileRender", function( ) {
+    it( "just calls a callback with null", function( done ) {
+      inaturalist.beforeTileRender( { }, " ", function( val ) {
+        expect( val ).to.be.null;
+        done( );
+      });
+    });
+  });
+
+  describe( "afterTileRender", function( ) {
+    it( "sets a default header", function( done ) {
+      var req = { params: { } };
+      inaturalist.afterTileRender( req, " ", " ", { }, function( val, t, h ) {
+        expect( h["Cache-Control"] ).to.equal( "public, max-age=" + conf.application.cache_max_age );
+        done( );
+      });
+    });
+
+    it( "allows a custom TTL", function( done ) {
+      var req = { params: { ttl: 1234 } };
+      inaturalist.afterTileRender( req, " ", " ", { }, function( val, t, h ) {
+        expect( h["Cache-Control"] ).to.equal( "public, max-age=1234" );
+        done( );
+      });
+    });
+  });
 });
