@@ -37,26 +37,10 @@ taxon_id||integer|grid data is restricted to observations of this taxon or taxon
 user_id||integer|grid data is restricted to observations by this user
 place_id||integer|grid data is restricted to observations in this place
 project_id||integer|grid data is restricted to observations in this project
-color||string|HTML-escaped HEX color code (e.g. %23000000 for black). By default, colors will be [based on the taxon](http://www.inaturalist.org/pages/help#mapsymbols).
-ttl||integer|Number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 3600 (1 hour)
-
-### Render Point Tile
-Render a PNG tile with points showing every observation matching the request parameters. Colors are [based on the taxon represented](http://www.inaturalist.org/pages/help#mapsymbols).
-```
-/observations/points/:z/:x/:y.png
-```
-**Parameters**
-
-Name | Required | Type | Description
------|----------|------|-------------
-x|**true**|integer|X value in XYZ tiling scheme
-y|**true**|integer|Y value in XYZ tiling scheme
-z|**true**|integer|Z value in XYZ tiling scheme
-taxon_id||integer|points are restricted to observations of this taxon or taxonomic group
-user_id||integer|points are restricted to observations by this user
-place_id||integer|points are restricted to observations in this place
-project_id||integer|points are restricted to observations in this project
-ttl||integer|Number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 3600 (1 hour)
+color||string|HTML-escaped HEX color code (e.g. %23000000 for black). By default, colors will be [based on the taxon](http://www.inaturalist.org/pages/help#mapsymbols)
+opacity||float|maximum opacity of the cell contents. Cell opacities will still change based on the count of observations represented, but this value will define the high end of the range. Defaults to 1
+border_opacity||float|opacity of the cell borders. Defaults to 1
+ttl||integer|number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 3600 (1 hour)
 
 ### Grid Tile Counts
 Return a JSON file listing the counts of each cell from the grid tile method. Format is based on [UTFGrid](https://github.com/mapbox/utfgrid-spec), as used by [MapBox](https://www.mapbox.com/foundations/an-open-platform/#utfgrid)
@@ -75,4 +59,55 @@ taxon_id||integer|grid data is restricted to observations of this taxon or taxon
 user_id||integer|grid data is restricted to observations by this user
 place_id||integer|grid data is restricted to observations in this place
 project_id||integer|grid data is restricted to observations in this project
-ttl||integer|Number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 3600 (1 hour)
+ttl||integer|number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 3600 (1 hour)
+
+### Render Point Tile
+Render a PNG tile with points showing every observation matching the request parameters. Colors are [based on the taxon represented](http://www.inaturalist.org/pages/help#mapsymbols).
+```
+/observations/points/:z/:x/:y.png
+```
+**Parameters**
+
+Name | Required | Type | Description
+-----|----------|------|-------------
+x|**true**|integer|X value in XYZ tiling scheme
+y|**true**|integer|Y value in XYZ tiling scheme
+z|**true**|integer|Z value in XYZ tiling scheme
+taxon_id||integer|points are restricted to observations of this taxon or taxonomic group
+user_id||integer|points are restricted to observations by this user
+place_id||integer|points are restricted to observations in this place
+project_id||integer|points are restricted to observations in this project
+color||string|HTML-escaped HEX color code (e.g. %23000000 for black). By default, colors will be [based on the taxon](http://www.inaturalist.org/pages/help#mapsymbols)
+opacity||float|opacity of the points. Defaults to 1
+border_opacity||float|opacity of the point borders. Defaults to 1
+ttl||integer|number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 3600 (1 hour)
+
+### Render Place Tile
+Render a PNG tile representing a place.
+```
+/places/:place_id/:z/:x/:y.png
+```
+**Parameters**
+
+Name | Required | Type | Description
+-----|----------|------|-------------
+place_id|**true**|integer|ID of the place to render
+x|**true**|integer|X value in XYZ tiling scheme
+y|**true**|integer|Y value in XYZ tiling scheme
+z|**true**|integer|Z value in XYZ tiling scheme
+ttl||integer|number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 3600 (1 hour)
+
+### Render Taxon Range Tile
+Render a PNG tile representing a taxon's range, if available.
+```
+/taxon_ranges/:taxon_id/:z/:x/:y.png
+```
+**Parameters**
+
+Name | Required | Type | Description
+-----|----------|------|-------------
+taxon_id|**true**|integer|ID of the taxon whose range is to be rendered
+x|**true**|integer|X value in XYZ tiling scheme
+y|**true**|integer|Y value in XYZ tiling scheme
+z|**true**|integer|Z value in XYZ tiling scheme
+ttl||integer|number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 3600 (1 hour)
