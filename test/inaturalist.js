@@ -89,9 +89,9 @@ describe( "inaturalist", function( ) {
       req.inat.maximumCount = 1000;
       inaturalist.gridRequest( req, function( ) {
         expect( req.params.style ).to.include(
-          "[count<=2000] { polygon-fill: #333333; polygon-opacity:1; }" );
+          "[count<=2000] { polygon-fill: #6E6E6E; polygon-opacity:1; }" );
         expect( req.params.style ).to.include(
-          "[count<2] { polygon-fill: #333333; polygon-opacity:0.28; }" );
+          "[count<2] { polygon-fill: #6E6E6E; polygon-opacity:0.28; }" );
         done( );
       });
     });
@@ -136,7 +136,7 @@ describe( "inaturalist", function( ) {
     });
 
     it( "filters by observation", function( done ) {
-      req.params.obs_id = 1;
+      req.params.observation_id = 1;
       inaturalist.pointsRequest( req, function( ) {
         expect( req.params.sql ).to.include( "AND (o.id != 1)" );
         done( );
