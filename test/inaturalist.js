@@ -492,7 +492,15 @@ describe( "inaturalist", function( ) {
     it( "sets a default header", function( done ) {
       var req = { params: { } };
       inaturalist.afterTileRender( req, " ", " ", { }, function( val, t, h ) {
-        expect( h["Cache-Control"] ).to.equal( "public, max-age=" + conf.application.cache_max_age );
+        expect( h["Cache-Control"] ).to.equal( "public, max-age=" + (60 * 60) );
+        done( );
+      });
+    });
+
+    it( "sets a default header for each endpoint", function( done ) {
+      var req = { params: { endpoint: 'places' } };
+      inaturalist.afterTileRender( req, " ", " ", { }, function( val, t, h ) {
+        expect( h["Cache-Control"] ).to.equal( "public, max-age=" + (60 * 60 * 24 * 7) );
         done( );
       });
     });
