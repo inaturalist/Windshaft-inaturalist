@@ -136,9 +136,9 @@ describe( "inaturalist", function( ) {
     });
 
     it( "filters by observation", function( done ) {
-      req.params.observation_id = 1;
+      req.params.observation_id = "1";
       inaturalist.pointsRequest( req, function( ) {
-        expect( req.params.sql ).to.include( "AND (o.id != 1)" );
+        expect( req.params.sql ).to.include( "AND (o.id NOT IN (1))" );
         done( );
       });
     });
