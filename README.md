@@ -127,6 +127,6 @@ taxon_id|**true**|integer|ID of the taxon whose range is to be rendered
 x|**true**|integer|X value in XYZ tiling scheme
 y|**true**|integer|Y value in XYZ tiling scheme
 z|**true**|integer|Z value in XYZ tiling scheme
-confirmedColor||string|HTML-escaped HEX color code (defaults to %23FF5EB0)
-unconfirmedColor||string|HTML-escaped HEX color code (defaults to %23FF5EB0)
+confirmedColor||string|HTML-escaped HEX color code (defaults to %23088A08)
+unconfirmedColor||string|HTML-escaped HEX color code (defaults to %23DAA520)
 ttl||integer|number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 604800 (1 week)
