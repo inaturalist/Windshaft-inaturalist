@@ -1,7 +1,7 @@
 var squel = require( "squel" ),
     expect = require( "chai" ).expect,
     inaturalist = require( "../lib/inaturalist" ),
-    conf = require("../config"),
+    config = require("../config"),
     req, query,
     emptyRequest = { inat: { }, params: { } };
 
@@ -144,7 +144,7 @@ describe( "inaturalist", function( ) {
     });
 
     it( "fails when Z is out of bounds", function( done ) {
-      req.params.z = 8;
+      req.params.z = config.application.min_zoom_level_for_points - 1;
       inaturalist.pointsRequest( req, function( err ) {
         expect( err ).to.equal( "Unable to process point requests for this zoom level" );
         done( );
@@ -156,6 +156,104 @@ describe( "inaturalist", function( ) {
       inaturalist.pointsRequest( req, function( err ) {
         expect( req.params.style ).to.include(
           "[zoom >= 0] { marker-fill: #ABCDEF; }" );
+        done( );
+      });
+    });
+  });
+
+  describe( "placeRequest", function( ) {
+    beforeEach( function( ) {
+      req = { params: { endpoint_or_id: 1, z: 1 } };
+    });
+
+    it( "can set an overriding color", function( done ) {
+      req.params.color = "#ABCDEF";
+      inaturalist.placeRequest( req, function( err ) {
+        expect( req.params.style ).to.include(
+          "#places {polygon-fill:#ABCDEF;" );
+        done( );
+      });
+    });
+  });
+
+  describe( "taxonRangeRequest", function( ) {
+    beforeEach( function( ) {
+      req = { params: { endpoint_or_id: 1, z: 1 } };
+    });
+
+    it( "can set an overriding color", function( done ) {
+      req.params.color = "#ABCDEF";
+      inaturalist.taxonRangeRequest( req, function( err ) {
+        expect( req.params.style ).to.include(
+          "#taxon_ranges {polygon-fill:#ABCDEF;" );
+        done( );
+      });
+    });
+  });
+
+  describe( "taxonPlacesRequest", function( ) {
+    beforeEach( function( ) {
+      req = { params: { endpoint_or_id: 1, z: 1 } };
+    });
+
+    it( "creates the most basic points query", function( done ) {
+      expect( req.params.sql ).to.be.undefined;
+      expect( req.params.style ).to.be.undefined;
+      inaturalist.taxonPlacesRequest( req, function( ) {
+        expect( req.params.sql ).to.equal( "(SELECT geom, " +
+          "MAX(lt.last_observation_id) as last_observation_id, "+
+          "MAX(lt.occurrence_status_level) as occurrence_status_level, " +
+          "MAX(lt.establishment_means) as establishment_means FROM listed_taxa lt " +
+          "INNER JOIN places p ON (lt.place_id = p.id) "+
+          "INNER JOIN place_geometries pg ON (p.id = pg.place_id) "+
+          "WHERE (lt.taxon_id = 1 and p.admin_level = 0) GROUP BY geom) AS places" );
+        expect( req.params.style ).to.include( "#taxon_places" );
+        done( );
+      });
+    });
+
+    it( "sets admin_level based on zoom", function( done ) {
+      req.params.z = 4;
+      inaturalist.taxonPlacesRequest( req, function( err ) {
+        expect( req.params.sql ).to.include( "admin_level = 1" );
+        done( );
+      });
+    });
+
+    it( "sets admin_level based on zoom", function( done ) {
+      req.params.z = 6;
+      inaturalist.taxonPlacesRequest( req, function( err ) {
+        expect( req.params.sql ).to.include( "admin_level = 2" );
+        done( );
+      });
+    });
+
+    it( "sets admin_level based on zoom", function( done ) {
+      req.params.z = 12;
+      inaturalist.taxonPlacesRequest( req, function( err ) {
+        expect( req.params.sql ).to.include( "admin_level = 3" );
+        done( );
+      });
+    });
+
+    it( "can set an overriding confirmed color", function( done ) {
+      req.params.confirmedColor = "#ABCDEF";
+      inaturalist.taxonPlacesRequest( req, function( err ) {
+        expect( req.params.style ).to.include(
+          "#taxon_places {polygon-fill:#DAA520;" );
+        expect( req.params.style ).to.include(
+          "[last_observation_id > 0] {   line-color:#ABCDEF;" );
+        done( );
+      });
+    });
+
+    it( "can set an overriding unconfirmed color", function( done ) {
+      req.params.unconfirmedColor = "#ABCDEF";
+      inaturalist.taxonPlacesRequest( req, function( err ) {
+        expect( req.params.style ).to.include(
+          "#taxon_places {polygon-fill:#ABCDEF;" );
+        expect( req.params.style ).to.include(
+          "[last_observation_id > 0] {   line-color:#088A08;" );
         done( );
       });
     });
@@ -261,6 +359,18 @@ describe( "inaturalist", function( ) {
       });
     });
 
+    it( "still filters by taxon when debug mode is enabled", function( done ) {
+      inaturalist.setDebug( true );
+      req.params.table = "observations";
+      req.params.endpoint_or_id = "grid";
+      req.params.taxon_id = 1;
+      inaturalist.req2params( req, function( ) {
+        expect( req.params.sql ).to.equal(
+          "(SELECT count, geom FROM observation_zooms_2 WHERE (taxon_id = 1)) AS snap_grid" );
+        done( );
+      });
+    });
+
     it( "passes off to the points endpoint", function( done ) {
       req.params.z = 12;
       req.params.table = "observations";
@@ -277,7 +387,7 @@ describe( "inaturalist", function( ) {
       req.params.endpoint_or_id = 1;
       inaturalist.req2params( req, function( ) {
         expect( req.params.sql ).to.equal(
-          "(SELECT geom FROM place_geometries WHERE (place_id=1)) AS place" );
+          "(SELECT geom FROM place_geometries WHERE (place_id=1)) AS places" );
         done( );
       });
     });
@@ -293,14 +403,18 @@ describe( "inaturalist", function( ) {
       });
     });
 
-    it( "passes off to the taxon_ranges endpoint", function( done ) {
-      inaturalist.setDebug( true );
-      req.params.table = "observations";
-      req.params.endpoint_or_id = "grid";
-      req.params.taxon_id = 1;
+    it( "passes off to the taxon_placesf endpoint", function( done ) {
+      req.params.z = 1;
+      req.params.table = "taxon_places";
+      req.params.endpoint_or_id = 1;
       inaturalist.req2params( req, function( ) {
-        expect( req.params.sql ).to.equal(
-          "(SELECT count, geom FROM observation_zooms_2 WHERE (taxon_id = 1)) AS snap_grid" );
+        expect( req.params.sql ).to.equal( "(SELECT geom, " +
+          "MAX(lt.last_observation_id) as last_observation_id, "+
+          "MAX(lt.occurrence_status_level) as occurrence_status_level, " +
+          "MAX(lt.establishment_means) as establishment_means FROM listed_taxa lt " +
+          "INNER JOIN places p ON (lt.place_id = p.id) "+
+          "INNER JOIN place_geometries pg ON (p.id = pg.place_id) "+
+          "WHERE (lt.taxon_id = 1 and p.admin_level = 0) GROUP BY geom) AS places" );
         done( );
       });
     });
