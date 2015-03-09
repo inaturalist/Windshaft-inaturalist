@@ -237,7 +237,7 @@ describe( "inaturalist", function( ) {
     });
 
     it( "can set an overriding confirmed color", function( done ) {
-      req.params.confirmedColor = "#ABCDEF";
+      req.params.confirmed_color = "#ABCDEF";
       inaturalist.taxonPlacesRequest( req, function( err ) {
         expect( req.params.style ).to.include(
           "#taxon_places {polygon-fill:#DAA520;" );
@@ -248,7 +248,7 @@ describe( "inaturalist", function( ) {
     });
 
     it( "can set an overriding unconfirmed color", function( done ) {
-      req.params.unconfirmedColor = "#ABCDEF";
+      req.params.unconfirmed_color = "#ABCDEF";
       inaturalist.taxonPlacesRequest( req, function( err ) {
         expect( req.params.style ).to.include(
           "#taxon_places {polygon-fill:#ABCDEF;" );

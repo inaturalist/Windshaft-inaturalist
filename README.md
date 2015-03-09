@@ -114,7 +114,7 @@ z|**true**|integer|Z value in XYZ tiling scheme
 color||string|HTML-escaped HEX color code (defaults to %23FF5EB0)
 ttl||integer|number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 604800 (1 week)
 
-### Render Taxon Range Tile
+### Render Taxon Places Tile
 Render a PNG tile representing the places a taxon is known and presumed to occur. The places rendered are based on the zoom level, showing more general places at higher zooms (e.g. countries) and more specific locations at lower zooms (e.g. counties).
 ```
 /taxon_places/:taxon_id/:z/:x/:y.png
@@ -127,6 +127,6 @@ taxon_id|**true**|integer|ID of the taxon whose range is to be rendered
 x|**true**|integer|X value in XYZ tiling scheme
 y|**true**|integer|Y value in XYZ tiling scheme
 z|**true**|integer|Z value in XYZ tiling scheme
-confirmedColor||string|HTML-escaped HEX color code (defaults to %23088A08)
-unconfirmedColor||string|HTML-escaped HEX color code (defaults to %23DAA520)
+confirmed_color||string|HTML-escaped HEX color code (defaults to %23088A08)
+unconfirmed_color||string|HTML-escaped HEX color code (defaults to %23DAA520)
 ttl||integer|number of seconds to assign to the HTML header Cache-Control option max-age. Defaults to 604800 (1 week)
