@@ -1,6 +1,8 @@
 // Example config file for the windshaft server
 // Fill with the appropiate values and rename to config.js
 
+var fs = require("fs");
+
 // Configuration structure name
 var config = { };
 
@@ -17,7 +19,8 @@ config.application.cache_max_age = {
   grids: 60 * 60 * 24, // 1 day
   points: 60 * 60, // 1 hour
   places: 60 * 60 * 24 * 7, // 1 week
-  taxon_ranges: 60 * 60 * 24 * 7 // 1 week
+  taxon_ranges: 60 * 60 * 24 * 7, // 1 week
+  taxon_places: 60 * 60 * 24 * 7 // 1 week
 }
 
 config.application.debug_function = console.log;
@@ -42,6 +45,9 @@ config.database.password = null;
 // redis-server params
 config.redis.host = "127.0.0.1";
 config.redis.port = 6379;
+
+// nodetime
+config.nodetime = { };
 
 // debugging
 config.debug = false;
