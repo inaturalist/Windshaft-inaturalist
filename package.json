@@ -20,7 +20,9 @@
     "onecolor": "~2.4.2",
     "squel": "~3.9.1",
     "step": "~0.0.5",
-    "pg": "~3.6.2"
+    "pg": "~3.6.2",
+    "newrelic": "~1.17.1",
+    "nodetime": "~0.8.15"
   },
   "devDependencies": {
     "mocha": "^2.0.1",
